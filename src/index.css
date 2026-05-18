@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@theme {
+  /* Backgrounds — 4-level surface system from design */
+  --color-bg-base: #0a0a0f;
+  --color-bg-surface: #13131a;
+  --color-bg-elevated: #1c1c26;
+  --color-bg-overlay: #252533;
+
+  /* Accent — amber */
+  --color-accent: #f59e0b;
+  --color-accent-secondary: #d97706;
+
+  /* Status colors */
+  --color-status-in: #22c55e;
+  --color-status-in-bg: #052e16;
+  --color-status-in-border: #15803d;
+  --color-status-out: #ef4444;
+  --color-status-out-bg: #2d0707;
+  --color-status-out-border: #b91c1c;
+  --color-status-remind: #a78bfa;
+  --color-status-remind-bg: #1e1030;
+  --color-status-remind-border: #7c3aed;
+
+  /* Text levels */
+  --color-text-primary: #f3f4f6;
+  --color-text-secondary: #9ca3af;
+  --color-text-muted: #6b7280;
+  --color-text-disabled: #374151;
+
+  /* Borders */
+  --color-border: #1f2028;
+  --color-border-focus: #f59e0b;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
