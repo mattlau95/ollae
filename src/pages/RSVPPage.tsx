@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Bell, MapPin, Calendar, Users } from 'lucide-react'
 
-const API = 'http://localhost:8080'
+const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://showup-backend.fly.dev'
 
 type Response = {
   id: string

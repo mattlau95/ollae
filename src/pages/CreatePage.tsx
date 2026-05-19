@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Copy, Check } from 'lucide-react'
 
-const API = 'http://localhost:8080'
+const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://showup-backend.fly.dev'
 
 export default function CreatePage() {
   const [title, setTitle] = useState('')
