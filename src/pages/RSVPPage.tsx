@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Bell, MapPin, Calendar, Users } from 'lucide-react'
 
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://showup-backend.fly.dev'
 
@@ -29,6 +28,7 @@ export default function RSVPPage() {
   const [responses, setResponses] = useState<Response[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState(false)
 
   const [name, setName] = useState('')
   const [status, setStatus] = useState<RSVPStatus>(null)
@@ -87,108 +87,114 @@ export default function RSVPPage() {
   if (submitted) return <SuccessScreen name={name} status={status!} onBack={() => setSubmitted(false)} />
 
   const attendingCount = responses.filter(r => r.status === 'in').length
+  const sorted = [...responses].reverse()
+  const visible = showAll ? sorted : sorted.slice(0, 8)
 
   return (
     <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-8">
       <div className="w-full max-w-sm flex flex-col gap-6">
 
         {/* Event info */}
-        <div className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold text-text-primary">{event!.title}</h1>
-          <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-bold text-text-primary">🏐 {event!.title}</h1>
+          <div className="flex flex-col gap-0.5 mt-1">
             {event!.event_date && (
-              <div className="flex items-center gap-2 text-sm text-text-secondary">
-                <Calendar size={14} />
-                {new Date(event!.event_date).toLocaleDateString('en-US', {
-                  weekday: 'long', month: 'long', day: 'numeric',
-                })}
-              </div>
+              <p className="text-sm font-medium text-text-secondary">📅 {formatDate(event!.event_date)}</p>
+            )}
+            {event!.event_date && hasTime(event!.event_date) && (
+              <p className="text-sm font-medium text-text-secondary">⏰ {formatTime(event!.event_date)}</p>
             )}
             {event!.location && (
-              <div className="flex items-center gap-2 text-sm text-text-secondary">
-                <MapPin size={14} />
-                {event!.location}
-              </div>
+              <p className="text-sm font-medium text-text-secondary">📍 {event!.location}</p>
             )}
           </div>
         </div>
 
         {/* Attending count */}
-        <div className="flex items-center gap-2 text-text-secondary text-sm">
-          <Users size={14} />
-          <span>
-            <span className="text-text-primary font-semibold text-lg">{attendingCount}</span>
-            {' '}attending
-          </span>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-4xl font-bold text-text-primary">{attendingCount}</span>
+          <span className="text-lg text-text-secondary">attending</span>
         </div>
 
         {/* Activity feed */}
         {responses.length > 0 && (
-          <div className="bg-bg-surface rounded-[--radius-lg] p-4 flex flex-col gap-3">
-            {responses.slice(-8).reverse().map(r => (
-              <div key={r.id} className="flex items-center gap-2 text-sm">
-                <span className={statusDot(r.status)} />
-                <span className="text-text-primary font-medium">{r.name}</span>
-                <span className="text-text-muted">{statusLabel(r.status)}</span>
-                <span className="text-text-disabled ml-auto">
-                  {timeAgo(r.created_at)}
-                </span>
-              </div>
-            ))}
+          <div className="flex flex-col gap-2">
+            <div className="bg-bg-surface rounded-[--radius-lg] px-4 py-3 flex flex-col gap-2">
+              {visible.map(r => (
+                <p key={r.id} className="text-sm text-text-secondary">
+                  <span className="text-text-primary font-medium">{r.name}</span>
+                  {' '}{statusText(r.status)}{' · '}{timeAgo(r.created_at)}
+                </p>
+              ))}
+            </div>
+            {responses.length > 8 && (
+              <button
+                onClick={() => setShowAll(v => !v)}
+                className="text-sm text-text-muted hover:text-text-secondary transition-colors self-start underline underline-offset-2"
+              >
+                {showAll ? 'Show less' : 'See All'}
+              </button>
+            )}
           </div>
         )}
 
         {/* RSVP form */}
         <div className="flex flex-col gap-4">
-          <input
-            type="text"
-            placeholder="Your name"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            className="w-full bg-bg-surface border border-border rounded-[--radius-md] px-4 py-3 text-text-primary placeholder-text-muted focus:outline-none focus:border-border-focus transition-colors"
-          />
+          <h2 className="text-xl font-bold text-text-primary">RSVP</h2>
+
+          <div className="flex flex-col gap-1.5">
+            <input
+              type="text"
+              placeholder="Enter name here"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full bg-bg-surface rounded-[--radius-md] px-4 py-3 text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-border-focus transition-colors"
+            />
+            <p className="text-xs text-text-muted px-1">Use a name the organizer would recognize as you.</p>
+          </div>
 
           <div className="flex gap-3">
             <button
               onClick={() => setStatus('in')}
-              className={`flex-1 py-3 rounded-[--radius-md] font-medium text-sm transition-colors ${
+              className={`flex-1 py-4 rounded-[--radius-md] font-medium text-sm transition-colors flex flex-col items-center gap-2 ${
                 status === 'in'
-                  ? 'bg-status-in-bg border border-status-in-border text-status-in'
-                  : 'bg-bg-surface border border-border text-text-secondary hover:border-status-in-border hover:text-status-in'
+                  ? 'bg-green-100 border border-green-600 text-green-600'
+                  : 'bg-bg-surface text-text-primary'
               }`}
             >
+              <span className="text-2xl">✅</span>
               I'm in
             </button>
             <button
               onClick={() => setStatus('out')}
-              className={`flex-1 py-3 rounded-[--radius-md] font-medium text-sm transition-colors ${
+              className={`flex-1 py-4 rounded-[--radius-md] font-medium text-sm transition-colors flex flex-col items-center gap-2 ${
                 status === 'out'
-                  ? 'bg-status-out-bg border border-status-out-border text-status-out'
-                  : 'bg-bg-surface border border-border text-text-secondary hover:border-status-out-border hover:text-status-out'
+                  ? 'bg-red-100 border border-red-600 text-red-600'
+                  : 'bg-bg-surface text-text-primary'
               }`}
             >
+              <span className="text-2xl">😔</span>
               Can't make it
             </button>
           </div>
+
+          <button
+            onClick={() => setStatus('remind_me')}
+            className="text-center text-sm text-text-muted hover:text-text-secondary transition-colors underline underline-offset-2"
+          >
+            Not sure yet — remind me closer to the date
+          </button>
 
           <button
             onClick={handleSubmit}
             disabled={!name.trim() || !status || submitting}
             className={`w-full py-3 rounded-[--radius-md] font-semibold text-sm transition-colors ${
               name.trim() && status
-                ? 'bg-accent text-bg-base hover:bg-accent-secondary'
+                ? 'bg-accent text-white hover:bg-accent-secondary'
                 : 'bg-bg-elevated text-text-disabled cursor-not-allowed'
             }`}
           >
-            {submitting ? 'Submitting...' : 'Submit'}
-          </button>
-
-          <button
-            onClick={() => setStatus('remind_me')}
-            className="text-center text-sm text-text-muted hover:text-text-secondary transition-colors"
-          >
-            <Bell size={12} className="inline mr-1" />
-            Not sure yet — remind me closer to the date
+            {submitting ? 'Submitting...' : 'Submit →'}
           </button>
         </div>
 
@@ -198,45 +204,50 @@ export default function RSVPPage() {
 }
 
 function SuccessScreen({ name, status, onBack }: { name: string; status: RSVPStatus; onBack: () => void }) {
-  const emoji = status === 'in' ? '🎉' : status === 'out' ? '😢' : '🔔'
+  const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'
   const message = status === 'in' ? "You're on the list!" : status === 'out' ? "Got it, you're out." : "We'll remind you!"
+  const statusLine = status === 'in' ? `${name} · I'm in 🏐` : status === 'out' ? `${name} · Can't make it 😔` : `${name} · Remind me 🔔`
+  const statusColor = status === 'in' ? 'text-status-in' : status === 'out' ? 'text-status-out' : 'text-status-remind'
 
   return (
     <div className="min-h-screen bg-bg-base flex flex-col items-center justify-center px-4 gap-4 text-center">
       <div className="text-5xl">{emoji}</div>
-      <h2 className="text-2xl font-semibold text-text-primary">{message}</h2>
-      <p className={`text-sm font-medium ${statusTextColor(status)}`}>
-        {name} · {statusLabel(status)}
-      </p>
+      <h2 className="text-2xl font-bold text-text-primary">{message}</h2>
+      <p className={`text-sm font-medium ${statusColor}`}>{statusLine}</p>
       <p className="text-sm text-text-muted max-w-xs">
         Changed your plans? Just reopen this link and resubmit your name.
       </p>
-      <button onClick={onBack} className="text-sm text-text-muted hover:text-text-secondary transition-colors mt-2">
+      <button onClick={onBack} className="text-sm text-text-muted hover:text-text-secondary transition-colors mt-2 underline underline-offset-2">
         ← View who's coming
       </button>
     </div>
   )
 }
 
-function statusDot(status: string) {
+function statusText(status: string) {
   const map: Record<string, string> = {
-    in: 'w-2 h-2 rounded-full bg-status-in flex-shrink-0',
-    out: 'w-2 h-2 rounded-full bg-status-out flex-shrink-0',
-    remind_me: 'w-2 h-2 rounded-full bg-status-remind flex-shrink-0',
+    in: 'is in 🏐',
+    out: "can't make it 😔",
+    remind_me: 'wants a reminder 🔔',
   }
-  return map[status] ?? 'w-2 h-2 rounded-full bg-text-muted flex-shrink-0'
+  return map[status] ?? status
 }
 
-function statusLabel(status: RSVPStatus | string) {
-  const map: Record<string, string> = { in: 'is in', out: 'is out', remind_me: 'wants a reminder' }
-  return map[status as string] ?? status
+function formatDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric',
+  })
 }
 
-function statusTextColor(status: RSVPStatus) {
-  const map: Record<string, string> = {
-    in: 'text-status-in', out: 'text-status-out', remind_me: 'text-status-remind',
-  }
-  return map[status as string] ?? 'text-text-secondary'
+function formatTime(dateStr: string) {
+  return new Date(dateStr).toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  })
+}
+
+function hasTime(dateStr: string) {
+  const d = new Date(dateStr)
+  return d.getHours() !== 0 || d.getMinutes() !== 0
 }
 
 function timeAgo(dateStr: string) {
