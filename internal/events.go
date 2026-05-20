@@ -122,6 +122,46 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+
+	var body struct {
+		Title     string  `json:"title"`
+		Location  string  `json:"location"`
+		EventDate *string `json:"event_date"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if body.Title == "" {
+		http.Error(w, "title is required", http.StatusBadRequest)
+		return
+	}
+
+	var event Event
+	err := h.DB.QueryRow(`
+		UPDATE events
+		SET title = $1, location = $2, event_date = $3
+		WHERE slug = $4
+		RETURNING id, slug, title, location, event_date, created_at
+	`, body.Title, body.Location, body.EventDate, slug).Scan(
+		&event.ID, &event.Slug, &event.Title, &event.Location,
+		&event.EventDate, &event.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		http.Error(w, "event not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "failed to update event", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(event)
+}
+
 func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
