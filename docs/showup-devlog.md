@@ -824,6 +824,17 @@ Devlog committed to `showup-backend/docs/` on GitHub. Accessible from any device
 
 ---
 
+### Frontend Fix — Dynamic Browser Tab Titles
+
+Both pages were showing the static `<title>showup.gg</title>` from `index.html` regardless of which page was open. Small but noticeable polish issue.
+
+- **CreatePage** — `useEffect` on mount sets title to `"Create Event · showup.gg"`
+- **RSVPPage** — sets `document.title` to `"{event.title} · showup.gg"` once the event data loads
+
+Committed in `showup-frontend` as `717c4c0` (tab titles) and `1679429` (base HTML cleanup: title tag, Inter font, Figma-matched color tokens).
+
+---
+
 ### What's Next
 
 **Priority order:**
