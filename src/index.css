@@ -1,15 +1,20 @@
 @import "tailwindcss";
 
 @theme {
-  /* Backgrounds — 4-level surface system from design */
-  --color-bg-base: #0a0a0f;
-  --color-bg-surface: #13131a;
-  --color-bg-elevated: #1c1c26;
-  --color-bg-overlay: #252533;
+  /* Figma design — dark slate palette */
+  --color-bg-base: #0F172A;
+  --color-bg-surface: #273548;
+  --color-bg-elevated: #1E293B;
 
-  /* Accent — amber */
-  --color-accent: #f59e0b;
-  --color-accent-secondary: #d97706;
+  /* Text */
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #94A3B8;
+  --color-text-disabled: #64748B;
+
+  /* Borders */
+  --color-border: #334155;
+  --color-border-focus: rgba(255, 255, 255, 0.24);
 
   /* Status colors */
   --color-status-in: #22c55e;
@@ -22,20 +27,10 @@
   --color-status-remind-bg: #1e1030;
   --color-status-remind-border: #7c3aed;
 
-  /* Text levels */
-  --color-text-primary: #f3f4f6;
-  --color-text-secondary: #9ca3af;
-  --color-text-muted: #6b7280;
-  --color-text-disabled: #374151;
-
-  /* Borders */
-  --color-border: #1f2028;
-  --color-border-focus: #f59e0b;
-
   /* Radius */
   --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-md: 12px;
+  --radius-lg: 8px;
   --radius-xl: 20px;
   --radius-full: 9999px;
 }
@@ -48,6 +43,6 @@ body {
   margin: 0;
   background-color: var(--color-bg-base);
   color: var(--color-text-primary);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
