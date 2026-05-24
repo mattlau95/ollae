@@ -44,6 +44,7 @@ export default function RSVPPage() {
       .then(data => {
         setEvent(data.event)
         setResponses(data.responses)
+        document.title = `${data.event.title} · showup.gg`
         setLoading(false)
       })
       .catch(e => {
@@ -89,112 +90,142 @@ export default function RSVPPage() {
   const attendingCount = responses.filter(r => r.status === 'in').length
   const sorted = [...responses].reverse()
   const visible = showAll ? sorted : sorted.slice(0, 8)
+  const canSubmit = !!(name.trim() && status)
 
   return (
-    <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-8">
-      <div className="w-full max-w-sm flex flex-col gap-6">
+    <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6">
+      <div className="w-full max-w-sm flex flex-col gap-6 flex-1">
 
         {/* Event info */}
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-bold text-text-primary">🏐 {event!.title}</h1>
-          <div className="flex flex-col gap-0.5 mt-1">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-[28px] font-bold text-text-primary leading-tight">
+            🏐 {event!.title}
+          </h1>
+          <div className="flex flex-col gap-2 mt-1">
             {event!.event_date && (
-              <p className="text-sm font-medium text-text-secondary">📅 {formatDate(event!.event_date)}</p>
+              <p className="text-[13px] font-bold text-text-muted">📅  {formatDate(event!.event_date)}</p>
             )}
             {event!.event_date && hasTime(event!.event_date) && (
-              <p className="text-sm font-medium text-text-secondary">⏰ {formatTime(event!.event_date)}</p>
+              <p className="text-[13px] font-bold text-text-muted">⏰  {formatTime(event!.event_date)}</p>
             )}
             {event!.location && (
-              <p className="text-sm font-medium text-text-secondary">📍 {event!.location}</p>
+              <p className="text-[13px] font-bold text-text-muted">📍 {event!.location}</p>
             )}
           </div>
         </div>
 
-        {/* Attending count */}
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-4xl font-bold text-text-primary">{attendingCount}</span>
-          <span className="text-lg text-text-secondary">attending</span>
+        {/* Attending count + activity feed */}
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-2xl font-bold text-text-primary">{attendingCount}</span>
+            <span className="text-2xl font-normal text-text-primary">attending</span>
+          </div>
+
+          {responses.length > 0 && (
+            <>
+              <div className="bg-bg-surface rounded-lg overflow-hidden">
+                <div className="px-4 pt-4 flex flex-col">
+                  {visible.map(r => (
+                    <p key={r.id} className="text-base text-text-muted leading-[150%] pb-4">
+                      <span className="text-text-primary font-medium">{r.name}</span>
+                      {' '}{statusText(r.status)}{' · '}{timeAgo(r.created_at)}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              {responses.length > 8 && (
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => setShowAll(v => !v)}
+                    className="text-base text-text-primary underline underline-offset-2 transition-opacity hover:opacity-70"
+                  >
+                    {showAll ? 'Show less' : 'See All'}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        {/* Activity feed */}
-        {responses.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <div className="bg-bg-surface rounded-[--radius-lg] px-4 py-3 flex flex-col gap-2">
-              {visible.map(r => (
-                <p key={r.id} className="text-sm text-text-secondary">
-                  <span className="text-text-primary font-medium">{r.name}</span>
-                  {' '}{statusText(r.status)}{' · '}{timeAgo(r.created_at)}
-                </p>
-              ))}
-            </div>
-            {responses.length > 8 && (
-              <button
-                onClick={() => setShowAll(v => !v)}
-                className="text-sm text-text-muted hover:text-text-secondary transition-colors self-start underline underline-offset-2"
-              >
-                {showAll ? 'Show less' : 'See All'}
-              </button>
-            )}
-          </div>
-        )}
+        {/* Spacer — pushes RSVP form toward bottom on mobile, capped on desktop */}
+        <div className="flex-1 max-h-12" />
 
         {/* RSVP form */}
-        <div className="flex flex-col gap-4">
-          <h2 className="text-xl font-bold text-text-primary">RSVP</h2>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6">
+            <h2 className="text-2xl font-semibold text-text-primary">RSVP</h2>
 
-          <div className="flex flex-col gap-1.5">
-            <input
-              type="text"
-              placeholder="Enter name here"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              className="w-full bg-bg-surface rounded-[--radius-md] px-4 py-3 text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-border-focus transition-colors"
-            />
-            <p className="text-xs text-text-muted px-1">Use a name the organizer would recognize as you.</p>
+            {/* Name input */}
+            <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                placeholder="Enter name here"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary placeholder-text-muted border border-white/[0.08] focus:outline-none focus:border-white/25 transition-colors"
+              />
+              <p className="text-sm text-text-muted text-center">
+                Use a name the organizer would recognize as you.
+              </p>
+            </div>
+
+            {/* RSVP buttons */}
+            <div className="flex gap-4">
+              {/* I'm in */}
+              <button
+                onClick={() => setStatus('in')}
+                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors ${
+                  status === 'in'
+                    ? 'bg-[#DCFCE7] border-[#16A34A]'
+                    : 'bg-bg-elevated border-white/[0.08]'
+                }`}
+              >
+                <span className="text-[32px] leading-none">✅</span>
+                <span className={`text-xl font-normal ${status === 'in' ? 'text-[#22C55E]' : 'text-text-primary'}`}>
+                  I'm in
+                </span>
+              </button>
+
+              {/* Can't make it */}
+              <button
+                onClick={() => setStatus('out')}
+                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors ${
+                  status === 'out'
+                    ? 'bg-[#FEE2E2] border-[#DC2626]'
+                    : 'bg-bg-elevated border-white/[0.08]'
+                }`}
+              >
+                <span className={`text-[32px] leading-none ${status === 'out' ? '' : 'opacity-60'}`}>😔</span>
+                <span className={`text-xl font-normal ${status === 'out' ? 'text-[#EF4444]' : 'text-text-primary'}`}>
+                  Can't make it
+                </span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex gap-3">
+          {/* Not sure yet */}
+          <div className="flex justify-center">
             <button
-              onClick={() => setStatus('in')}
-              className={`flex-1 py-4 rounded-[--radius-md] font-medium text-sm transition-colors flex flex-col items-center gap-2 ${
-                status === 'in'
-                  ? 'bg-green-100 border border-green-600 text-green-600'
-                  : 'bg-bg-surface text-text-primary'
+              onClick={() => setStatus('remind_me')}
+              className={`text-base underline underline-offset-2 transition-opacity hover:opacity-70 ${
+                status === 'remind_me' ? 'text-status-remind' : 'text-text-primary'
               }`}
             >
-              <span className="text-2xl">✅</span>
-              I'm in
-            </button>
-            <button
-              onClick={() => setStatus('out')}
-              className={`flex-1 py-4 rounded-[--radius-md] font-medium text-sm transition-colors flex flex-col items-center gap-2 ${
-                status === 'out'
-                  ? 'bg-red-100 border border-red-600 text-red-600'
-                  : 'bg-bg-surface text-text-primary'
-              }`}
-            >
-              <span className="text-2xl">😔</span>
-              Can't make it
+              Not sure yet — remind me closer to the date
             </button>
           </div>
 
-          <button
-            onClick={() => setStatus('remind_me')}
-            className="text-center text-sm text-text-muted hover:text-text-secondary transition-colors underline underline-offset-2"
-          >
-            Not sure yet — remind me closer to the date
-          </button>
-
+          {/* Submit */}
           <button
             onClick={handleSubmit}
-            disabled={!name.trim() || !status || submitting}
-            className={`w-full py-3 rounded-[--radius-md] font-semibold text-sm transition-colors ${
-              name.trim() && status
-                ? 'bg-accent text-white hover:bg-accent-secondary'
-                : 'bg-bg-elevated text-text-disabled cursor-not-allowed'
+            disabled={!canSubmit || submitting}
+            className={`w-full py-4 rounded-xl text-xl font-normal border transition-colors ${
+              canSubmit
+                ? 'bg-[#F59E0B] text-[#F8FAFC] border-[#F8FAFC] hover:opacity-90'
+                : 'bg-bg-surface text-text-muted border-white/[0.08] cursor-not-allowed'
             }`}
           >
-            {submitting ? 'Submitting...' : 'Submit →'}
+            {submitting ? 'Submitting...' : 'Submit ->'}
           </button>
         </div>
 
@@ -207,17 +238,17 @@ function SuccessScreen({ name, status, onBack }: { name: string; status: RSVPSta
   const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'
   const message = status === 'in' ? "You're on the list!" : status === 'out' ? "Got it, you're out." : "We'll remind you!"
   const statusLine = status === 'in' ? `${name} · I'm in 🏐` : status === 'out' ? `${name} · Can't make it 😔` : `${name} · Remind me 🔔`
-  const statusColor = status === 'in' ? 'text-status-in' : status === 'out' ? 'text-status-out' : 'text-status-remind'
+  const statusColor = status === 'in' ? 'text-[#22C55E]' : status === 'out' ? 'text-[#EF4444]' : 'text-status-remind'
 
   return (
-    <div className="min-h-screen bg-bg-base flex flex-col items-center justify-center px-4 gap-4 text-center">
-      <div className="text-5xl">{emoji}</div>
-      <h2 className="text-2xl font-bold text-text-primary">{message}</h2>
-      <p className={`text-sm font-medium ${statusColor}`}>{statusLine}</p>
-      <p className="text-sm text-text-muted max-w-xs">
+    <div className="min-h-screen bg-bg-base flex flex-col items-center justify-center px-4 gap-6 text-center">
+      <div className="text-[64px] leading-none">{emoji}</div>
+      <h2 className="text-2xl font-semibold text-text-primary">{message}</h2>
+      <p className={`text-base ${statusColor}`}>{statusLine}</p>
+      <p className="text-base text-text-disabled max-w-xs">
         Changed your plans? Just reopen this link and resubmit your name.
       </p>
-      <button onClick={onBack} className="text-sm text-text-muted hover:text-text-secondary transition-colors mt-2 underline underline-offset-2">
+      <button onClick={onBack} className="text-base text-text-primary underline underline-offset-2 transition-opacity hover:opacity-70">
         ← View who's coming
       </button>
     </div>
