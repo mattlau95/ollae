@@ -634,3 +634,95 @@ The edit flow bug was a product-level issue disguised as a UI bug. A new link wo
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel*
 *Tools: Claude Code · Linear*
+
+---
+
+## Session 08 — May 24, 2026
+
+---
+
+### What We Did
+
+Designed the Claude API integration for event creation — decisions made, issues filed, no code written yet. This session was product and UX design work.
+
+---
+
+### Feature Designed
+
+**MAT-80 — Claude API: Natural language event creation**
+
+Adding Claude API to the event creation flow. Instead of a traditional four-field form, the organizer types a single natural-language description and Claude parses it into structured fields shown in an editable preview before the event is created.
+
+The portfolio framing: not a chatbot, not a wrapper. One API call, one gesture, immediate value — and easy to explain in an interview.
+
+---
+
+### Key Design Decisions
+
+**One API call on submit, not streaming**
+Email-style Smart Compose (streaming tokens on each keystroke) was considered and ruled out. Requires streaming calls on every keystroke pause — high latency, high cost, poor complexity-to-payoff for a 10–15 word input. Submit-and-parse is fast enough to feel instant. Autocomplete revisited in Phase 2 only for date/time normalization hints (JS-only, no API needed).
+
+**Missing field handling — the B+C approach**
+Three options considered:
+
+- A) Leave missing fields empty and highlighted — user fills manually
+- B) Always show editable preview — preview is the safety net, not a separate error state
+- C) Smart defaults for null fields — missing time → 12:00 PM, missing date → next Saturday, missing location → TBD
+
+Decision: B + C combined. Preview always renders. Missing fields get smart defaults with an amber visual indicator so the organizer sees what was assumed vs. inferred. A well-formed input is still one gesture; incomplete input is still graceful.
+
+Back-and-forth clarification loop explicitly ruled out — the moment it asks questions, it feels like a form again. Breaks the "reaction energy, not form energy" principle.
+
+**Input copy and placeholder strategy**
+Label (persistent): "Describe your event" / "Include date, time, and location — Claude will handle the rest."
+
+Placeholder examples that rotate:
+- `Volleyball Saturday 2pm · Venice Beach Court 4`
+- `Soccer Sunday 10am · Riverside Park`
+- `Basketball this Friday at 6 · 24 Hour Fitness`
+
+Goal: teach all four fields implicitly through example, not by listing requirements.
+
+**Manual entry escape hatch**
+Small secondary link below the input: "Fill in manually instead →". Reveals the standard four-field form. Signals AI input is optional cleverness, not a required hoop — and protects against misparse edge cases.
+
+---
+
+### Prompt Design (Planned)
+
+System prompt instructs Claude to return JSON only — no preamble, no markdown fences:
+
+```json
+{
+  "title": "Pickup Volleyball",
+  "date": "2026-05-30",
+  "time": "2:00 PM",
+  "location": "Venice Beach Court 4"
+}
+```
+
+Any field that cannot be inferred returns `null`. Frontend applies smart defaults for nulls before rendering the preview.
+
+---
+
+### Issues Created
+
+| Issue | Title | Priority |
+|---|---|---|
+| MAT-80 | Claude API — Natural language event creation with parsed preview | High |
+| MAT-81 | Claude API — Input field copy, placeholder examples & manual entry fallback | Medium |
+| MAT-82 | Claude API — Missing field handling: smart defaults + editable preview (B+C) | Medium |
+
+MAT-81 and MAT-82 are sub-issues of MAT-80.
+
+---
+
+### What's Next
+
+- MAT-81 — Finalize input copy and implement manual entry toggle
+- MAT-82 — Implement parsed preview card with smart default logic
+- MAT-80 — Wire Claude API call through serverless function (key security), integrate end-to-end
+
+---
+
+*Tools: Linear · Claude*
