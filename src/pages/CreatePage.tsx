@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://showup-backend.fly.dev'
 
@@ -83,6 +84,10 @@ export default function CreatePage() {
   return (
     <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6 sm:py-12 overflow-y-auto">
       <div className="w-full max-w-sm flex flex-col gap-5 flex-1">
+
+        <Link to="/create">
+          <img src="/ollae-logo.svg" alt="ollae" className="h-7 w-auto" />
+        </Link>
 
         {/* Header — dimmed when locked */}
         <div className={`flex flex-col gap-2 transition-opacity ${isLocked ? 'opacity-[0.45]' : ''}`}>

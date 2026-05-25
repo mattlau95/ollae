@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://showup-backend.fly.dev'
 
@@ -95,6 +95,10 @@ export default function RSVPPage() {
   return (
     <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6">
       <div className="w-full max-w-sm flex flex-col gap-6 flex-1">
+
+        <Link to="/create">
+          <img src="/ollae-logo.svg" alt="ollae" className="h-7 w-auto" />
+        </Link>
 
         {/* Event info */}
         <div className="flex flex-col gap-2">
