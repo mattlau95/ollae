@@ -824,6 +824,22 @@ Devlog committed to `showup-backend/docs/` on GitHub. Accessible from any device
 
 ---
 
+### Frontend Fix — Favicon
+
+Installed the full favicon package from realfavicongenerator.net. Previously the app had only a placeholder SVG.
+
+Files added to `public/`:
+- `favicon.ico` — legacy browser fallback
+- `favicon.svg` — modern SVG favicon
+- `favicon-96x96.png` — PNG fallback
+- `apple-touch-icon.png` — iOS home screen icon
+- `web-app-manifest-192x192.png` + `web-app-manifest-512x512.png` — PWA icons
+- `site.webmanifest` — PWA manifest (`name: ollae.app`, `theme_color: #0F172A`)
+
+Updated `index.html` with the full tag set: ICO shortcut, SVG, PNG, Apple touch icon, and manifest link. Committed `17505a0`, pushed to Vercel.
+
+---
+
 ### Frontend Fix — Dynamic Browser Tab Titles
 
 Both pages were showing the static `<title>showup.gg</title>` from `index.html` regardless of which page was open. Small but noticeable polish issue.
