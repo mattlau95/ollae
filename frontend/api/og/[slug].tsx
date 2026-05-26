@@ -1,7 +1,5 @@
 import { ImageResponse } from '@vercel/og'
 
-export const config = { runtime: 'edge' }
-
 const BACKEND = 'https://ollae-backend.fly.dev'
 
 function formatDate(dateStr: string) {
