@@ -1,4 +1,4 @@
-module github.com/mattlau95/showup-backend
+module github.com/mattlau95/ollae-backend
 
 go 1.26.3
 

@@ -44,7 +44,7 @@ export default function RSVPPage() {
       .then(data => {
         setEvent(data.event)
         setResponses(data.responses)
-        document.title = `${data.event.title} · showup.gg`
+        document.title = `${data.event.title} · ollae.app`
         setLoading(false)
       })
       .catch(e => {

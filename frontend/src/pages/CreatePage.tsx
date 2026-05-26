@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://showup-backend.fly.dev'
 
 export default function CreatePage() {
-  useEffect(() => { document.title = 'Create Event · showup.gg' }, [])
+  useEffect(() => { document.title = 'Create Event · ollae.app' }, [])
 
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
