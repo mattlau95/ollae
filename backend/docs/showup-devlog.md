@@ -1104,3 +1104,63 @@ The emoji field is small addition with outsized effect on shareability. An OG ca
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · fogleman/gg · OpenMoji*
 *Tools: Claude Code · Linear · Figma MCP*
+
+---
+
+## Session 13 — May 26, 2026
+
+---
+
+### What We Built
+
+Debugged and fixed Facebook Messenger not showing OG card previews. Documented as MAT-87.
+
+---
+
+### Issues Closed
+
+**MAT-87 — Facebook Messenger OG preview not showing**
+
+iMessage worked; Facebook Messenger didn't. Took three root causes to explain it.
+
+---
+
+### Things That Tripped Us Up
+
+**Stale Vercel serverless function still in git**
+
+`frontend/api/og/[slug].tsx` — an old `@vercel/og` ImageResponse function from a previous OG implementation — was still tracked in git. Vercel's git integration deploys everything it sees, so that function was live at `/api/og/:slug`. Facebook's scraper picked up that URL from the og metadata and used it instead of the correct `/og/:slug` proxy. The Facebook Sharing Debugger showed `og:image: https://ollae.app/api/og/<slug>` — the dead giveaway.
+
+Fix: `git rm frontend/api/og/[slug].tsx frontend/api/tsconfig.json frontend/middleware.ts`. Committed and pushed.
+
+**`http-equiv="refresh"` vs `location.replace()`**
+
+The og-preview endpoint originally used `<meta http-equiv="refresh" content="0;url=...?_src=app">` to redirect browsers to the SPA. Facebook's scraper follows meta refresh tags — it ended up at `?_src=app`, Vercel served `index.html`, no og tags. iMessage fetches using Safari which doesn't execute JavaScript but also doesn't follow meta refresh, so it hit the og-preview HTML directly and got the tags.
+
+Fix: removed the meta refresh entirely. Kept only `<script>location.replace("...")</script>` — scrapers don't execute JS, so they read the og tags and stop; browsers get redirected to the SPA.
+
+**HEAD requests return 405**
+
+Facebook validates og:image URLs with a HEAD request before scraping the full image. The Vercel rewrite passes HEAD through to the Go backend, which serves the route with a regular handler — Go's `net/http` responds to HEAD automatically for any GET handler. This turned out not to need an explicit fix, but it's worth noting as a potential failure point when og:image endpoints are behind custom middleware.
+
+---
+
+### Product Decisions Made
+
+| Decision | Rationale |
+|---|---|
+| Remove old API files entirely | Leaving dead Vercel functions in git is a deployment liability — they're silently live and can shadow new routes. Deleted, not just commented out. |
+| JS redirect only (no meta refresh) | Meta refresh is followed by crawlers; JS redirect is not. Only one of these works for the og-preview use case. |
+
+---
+
+### Reflection
+
+The iMessage vs Facebook Messenger split was a useful diagnostic. When one platform works and another doesn't, the difference is almost always scraper behavior, not the og tags themselves. Facebook's scraper is stricter — it follows redirects, validates image URLs with HEAD, and caches aggressively. The Facebook Sharing Debugger's "Scrape Again" button and the redirect chain it shows were the most useful debugging tool here.
+
+The stale serverless function is a good reminder that Vercel deploys the git tree, not what you have locally. A file you haven't thought about in weeks can still be live in production.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · fogleman/gg · OpenMoji*
+*Tools: Claude Code · Linear · Figma MCP*
