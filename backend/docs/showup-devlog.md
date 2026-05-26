@@ -920,3 +920,69 @@ Commits: `17505a0` (favicon), `1a73f99` (logo). Deployed to production — ollae
 ---
 
 *Tools: Claude Code · realfavicongenerator.net · Vercel*
+
+---
+
+## Session 11 — May 25, 2026
+
+---
+
+### What We Built
+
+Shipped MAT-80 (Claude API natural language event creation), closed the Ollae rebrand (MAT-75), and made a round of UX polish to the RSVP and Create pages.
+
+---
+
+### MAT-80 — Claude API: Natural Language Event Creation
+
+The headline feature. Organizer types a freeform description; Claude parses it into structured fields; an editable preview appears before the event is created.
+
+**Backend — `POST /parse-event`**
+
+New endpoint in `internal/parse.go`. Calls `claude-haiku-4-5-20251001` via the Anthropic Messages API (no SDK — plain `net/http`). System prompt includes today's date so relative references like "Saturday" resolve correctly. Returns JSON with `title`, `date` (YYYY-MM-DD), `time` (HH:MM 24hr), `location` — nulls for fields that couldn't be inferred.
+
+API key stored as a Fly.io secret (`ANTHROPIC_API_KEY`), read into `EventHandlers.AnthropicKey` at startup.
+
+Robustness additions after the first 500:
+- Check `resp.StatusCode != 200` before parsing — log the raw Anthropic error body
+- Strip markdown code fences if the model wraps its JSON response
+
+**Frontend — NL flow in `CreatePage.tsx`**
+
+Two-view state machine (`nl` | `form`):
+
+- **NL view** — single textarea, "Create Event →" button, "Fill in manually instead" escape hatch. Enter key triggers parse.
+- **Form view** — same editable fields, pre-filled from parse result. Fields the model filled get an amber border (`border-[#F59E0B]/70`) until the user edits them. "← Try a different description" link at the bottom.
+
+Subtitle, button label, and "Looks good?" prompt all adapt depending on whether the user came through NL or manual:
+
+| State | Subtitle | Button |
+|---|---|---|
+| NL parse | "Here's what we found — give it a look before creating." | "Yes! Create the Event →" |
+| Manual | "Fill in the details below, get a shareable link." | "Create Event →" |
+
+Date and time fields moved to the same row to reduce vertical space.
+
+---
+
+### UX Polish — RSVP Page
+
+- **Removed hardcoded 🏐 emoji** from the event title — it appeared regardless of event type
+- **Event meta condensed to one line** — date, time, and location now render as `📅 Saturday, May 30 · ⏰ 2:00 PM · 📍 Venice Beach Court 4` using an IIFE that builds an array of present fields and joins with ` · `
+- **RSVP button labels** reduced from `text-xl` to `text-base` to prevent "Can't make it" wrapping to two lines
+
+---
+
+### MAT-75 — Rebrand Closed
+
+Marked Done in Linear. Remaining cleanup: archived old `showup-frontend` and `showup-backend` GitHub repos. Linear team rename skipped (solo project).
+
+---
+
+### Infrastructure
+
+- `site.webmanifest` — fixed `theme_color` and `background_color` missing `#` prefix (browser was ignoring both values)
+
+---
+
+*Tools: Claude Code · Anthropic Console · Fly.io · Vercel*
