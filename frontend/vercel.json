@@ -1,6 +1,18 @@
 {
   "rewrites": [
-    { "source": "/events/:slug", "destination": "/index.html" },
+    {
+      "source": "/events/:slug",
+      "has": [{ "type": "query", "key": "_src", "value": "app" }],
+      "destination": "/index.html"
+    },
+    {
+      "source": "/events/:slug",
+      "destination": "https://ollae-backend.fly.dev/og-preview/:slug"
+    },
+    {
+      "source": "/og/:slug",
+      "destination": "https://ollae-backend.fly.dev/og/:slug"
+    },
     { "source": "/create", "destination": "/index.html" }
   ]
 }
