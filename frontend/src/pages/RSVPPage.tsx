@@ -182,7 +182,7 @@ export default function RSVPPage() {
                 }`}
               >
                 <span className="text-[32px] leading-none">✅</span>
-                <span className={`text-xl font-normal ${status === 'in' ? 'text-[#22C55E]' : 'text-text-primary'}`}>
+                <span className={`text-base font-normal ${status === 'in' ? 'text-[#22C55E]' : 'text-text-primary'}`}>
                   I'm in
                 </span>
               </button>
@@ -197,7 +197,7 @@ export default function RSVPPage() {
                 }`}
               >
                 <span className={`text-[32px] leading-none ${status === 'out' ? '' : 'opacity-60'}`}>😔</span>
-                <span className={`text-xl font-normal ${status === 'out' ? 'text-[#EF4444]' : 'text-text-primary'}`}>
+                <span className={`text-base font-normal ${status === 'out' ? 'text-[#EF4444]' : 'text-text-primary'}`}>
                   Can't make it
                 </span>
               </button>
