@@ -873,3 +873,50 @@ ollae.app is live. Real product, real name, real domain.
 ---
 
 *Tools: Porkbun · Vercel · Fly.io · USPTO · Linear*
+
+---
+
+## Session 10 — May 25, 2026
+
+---
+
+### What We Built
+
+Favicon package and wordmark logo added to the app — both deployed to production on ollae.app.
+
+---
+
+### Favicon (realfavicongenerator.net)
+
+![favicon](https://raw.githubusercontent.com/mattlau95/showup-frontend/master/public/favicon.svg)
+
+Generated a complete favicon package via realfavicongenerator.net and wired it up in `index.html` with the full tag set:
+
+```html
+<link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="shortcut icon" href="/favicon.ico" />
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/site.webmanifest" />
+```
+
+Files added to `public/`: `favicon.svg`, `favicon.ico`, `favicon-96x96.png`, `apple-touch-icon.png`, `web-app-manifest-192x192.png`, `web-app-manifest-512x512.png`, `site.webmanifest` (name: `ollae.app`, theme: `#0F172A`, display: `standalone`).
+
+---
+
+### Logo
+
+![ollae logo](https://raw.githubusercontent.com/mattlau95/showup-frontend/master/public/ollae-logo.svg)
+
+Added the amber `#F59E0B` wordmark to the top of both pages as a home button. The SVG source used `fill="white"` — recolored to `#F59E0B` to match the app's accent color before copying into `public/`.
+
+- **CreatePage** — logo sits above the "Create Event" header, links to `/create`
+- **RSVPPage** — logo sits above the event info, links to `/create` (home button for participants)
+
+Sized at `h-7` (28px) — readable on mobile without competing with page content. Includes 1x/2x/3x PNG variants in `public/` for future use.
+
+Commits: `17505a0` (favicon), `1a73f99` (logo). Deployed to production — ollae.app.
+
+---
+
+*Tools: Claude Code · realfavicongenerator.net · Vercel*
