@@ -1,0 +1,34 @@
+# Git
+.git
+.gitignore
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+
+# Go workspace
+go.work
+go.work.sum
+
+# Env
+.env
+
+# Fly / deploy config (not needed at runtime)
+fly.toml
+schema.sql
+Dockerfile
+
+# Claude
+.claude
+
+# Editor
+.idea
+.vscode
