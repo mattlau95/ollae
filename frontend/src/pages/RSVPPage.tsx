@@ -103,19 +103,16 @@ export default function RSVPPage() {
         {/* Event info */}
         <div className="flex flex-col gap-2">
           <h1 className="text-[28px] font-bold text-text-primary leading-tight">
-            🏐 {event!.title}
+            {event!.title}
           </h1>
-          <div className="flex flex-col gap-2 mt-1">
-            {event!.event_date && (
-              <p className="text-[13px] font-bold text-text-muted">📅  {formatDate(event!.event_date)}</p>
-            )}
-            {event!.event_date && hasTime(event!.event_date) && (
-              <p className="text-[13px] font-bold text-text-muted">⏰  {formatTime(event!.event_date)}</p>
-            )}
-            {event!.location && (
-              <p className="text-[13px] font-bold text-text-muted">📍 {event!.location}</p>
-            )}
-          </div>
+          {(() => {
+            const parts: string[] = []
+            if (event!.event_date) parts.push(`📅 ${formatDate(event!.event_date)}`)
+            if (event!.event_date && hasTime(event!.event_date)) parts.push(`⏰ ${formatTime(event!.event_date)}`)
+            if (event!.location) parts.push(`📍 ${event!.location}`)
+            if (parts.length === 0) return null
+            return <p className="text-[13px] font-bold text-text-muted mt-1">{parts.join(' · ')}</p>
+          })()}
         </div>
 
         {/* Attending count + activity feed */}
