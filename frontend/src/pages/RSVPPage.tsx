@@ -175,7 +175,7 @@ export default function RSVPPage() {
               {/* I'm in */}
               <button
                 onClick={() => setStatus('in')}
-                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors ${
+                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors overflow-visible ${
                   status === 'in'
                     ? 'bg-[#DCFCE7] border-[#16A34A]'
                     : 'bg-bg-elevated border-white/[0.08]'
@@ -190,7 +190,7 @@ export default function RSVPPage() {
               {/* Can't make it */}
               <button
                 onClick={() => setStatus('out')}
-                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors ${
+                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors overflow-visible ${
                   status === 'out'
                     ? 'bg-[#FEE2E2] border-[#DC2626]'
                     : 'bg-bg-elevated border-white/[0.08]'
