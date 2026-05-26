@@ -61,7 +61,7 @@ export default function RSVPPage() {
         const s = data.event.slug
         setMeta('og:title', data.event.title)
         setMeta('og:description', "Tap to see who's coming →")
-        setMeta('og:image', `${origin}/api/og/${s}`)
+        setMeta('og:image', `https://ollae.app/og/${s}`)
         setMeta('og:image:width', '1200')
         setMeta('og:image:height', '630')
         setMeta('og:url', `${origin}/events/${s}`)

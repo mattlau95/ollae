@@ -16,6 +16,7 @@ type ParsedEvent struct {
 	Date     *string `json:"date"`
 	Time     *string `json:"time"`
 	Location *string `json:"location"`
+	Emoji    string  `json:"emoji"`
 }
 
 var anthropicClient = &http.Client{Timeout: 15 * time.Second}
@@ -42,6 +43,7 @@ Return ONLY a JSON object with these exact keys:
 - "date": string or null (ISO date YYYY-MM-DD, resolve relative dates like "Saturday" using today's date)
 - "time": string or null (24-hour HH:MM format, e.g. "14:00" for 2pm)
 - "location": string or null
+- "emoji": string (single emoji that best represents the event, e.g. "🏐" for volleyball, "🎉" for a party, "🍕" for a dinner — never null, never more than one emoji)
 
 No explanation. No markdown. JSON only.`, today)
 

@@ -15,6 +15,7 @@ export default function CreatePage() {
   const [location, setLocation] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
+  const [emoji, setEmoji] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [slug, setSlug] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
@@ -26,8 +27,7 @@ export default function CreatePage() {
 
   function buildEventDate() {
     if (!date) return undefined
-    const raw = time ? `${date}T${time}` : `${date}T00:00`
-    return new Date(raw).toISOString()
+    return time ? `${date}T${time}:00` : `${date}T00:00:00`
   }
 
   async function handleParse() {
@@ -51,6 +51,7 @@ export default function CreatePage() {
       if (parsed.time) newAssumed.add('time')
       setLocation(parsed.location ?? '')
       if (parsed.location) newAssumed.add('location')
+      setEmoji(parsed.emoji ?? '')
       setAssumed(newAssumed)
       setView('form')
     } catch {
@@ -65,6 +66,7 @@ export default function CreatePage() {
     setDate('')
     setTime('')
     setLocation('')
+    setEmoji('')
     setAssumed(new Set())
     setView('form')
   }
@@ -84,6 +86,7 @@ export default function CreatePage() {
           title: title.trim(),
           location: location.trim() || undefined,
           event_date: buildEventDate(),
+          emoji: emoji || undefined,
         }),
       })
       if (!res.ok) throw new Error('Failed to create event')

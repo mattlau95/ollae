@@ -46,6 +46,9 @@ func main() {
 
 	r.Post("/events/{slug}/rsvp", h.SubmitRSVP)
 
+	r.Get("/og/{slug}", h.OGImage)
+	r.Get("/og-preview/{slug}", h.OGPreview)
+
 	log.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }

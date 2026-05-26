@@ -1,10 +1,14 @@
 package internal
 
 import (
+	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,6 +22,7 @@ type Event struct {
 	Location  string     `json:"location"`
 	EventDate *time.Time `json:"event_date"`
 	CreatedAt time.Time  `json:"created_at"`
+	Emoji     string     `json:"emoji"`
 }
 
 type Response struct {
@@ -34,11 +39,46 @@ type EventHandlers struct {
 	AnthropicKey string
 }
 
+func pickEmoji(ctx context.Context, apiKey, title string) string {
+	if apiKey == "" {
+		return ""
+	}
+	payload, _ := json.Marshal(map[string]any{
+		"model":      "claude-haiku-4-5-20251001",
+		"max_tokens": 16,
+		"system":     "Reply with a single emoji that best represents the event. Nothing else — one emoji only.",
+		"messages":   []map[string]string{{"role": "user", "content": title}},
+	})
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(payload))
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-api-key", apiKey)
+	req.Header.Set("anthropic-version", "2023-06-01")
+	resp, err := anthropicClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(resp.Body)
+	var apiResp struct {
+		Content []struct {
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &apiResp); err != nil || len(apiResp.Content) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(apiResp.Content[0].Text)
+}
+
 func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Title     string  `json:"title"`
 		Location  string  `json:"location"`
 		EventDate *string `json:"event_date"`
+		Emoji     string  `json:"emoji"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -49,6 +89,11 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	emoji := body.Emoji
+	if emoji == "" {
+		emoji = pickEmoji(r.Context(), h.AnthropicKey, body.Title)
+	}
+
 	slug, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz0123456789", 8)
 	if err != nil {
 		http.Error(w, "failed to generate slug", http.StatusInternalServerError)
@@ -57,12 +102,12 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	var event Event
 	err = h.DB.QueryRow(`
-		INSERT INTO events (slug, title, location, event_date)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, slug, title, location, event_date, created_at
-	`, slug, body.Title, body.Location, body.EventDate).Scan(
+		INSERT INTO events (slug, title, location, event_date, emoji)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, slug, title, location, event_date, created_at, emoji
+	`, slug, body.Title, body.Location, body.EventDate, emoji).Scan(
 		&event.ID, &event.Slug, &event.Title, &event.Location,
-		&event.EventDate, &event.CreatedAt,
+		&event.EventDate, &event.CreatedAt, &event.Emoji,
 	)
 	if err != nil {
 		http.Error(w, "failed to create event", http.StatusInternalServerError)
@@ -79,11 +124,11 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 
 	var event Event
 	err := h.DB.QueryRow(`
-		SELECT id, slug, title, location, event_date, created_at
+		SELECT id, slug, title, location, event_date, created_at, emoji
 		FROM events WHERE slug = $1
 	`, slug).Scan(
 		&event.ID, &event.Slug, &event.Title, &event.Location,
-		&event.EventDate, &event.CreatedAt,
+		&event.EventDate, &event.CreatedAt, &event.Emoji,
 	)
 	if err == sql.ErrNoRows {
 		http.Error(w, "event not found", http.StatusNotFound)
@@ -145,10 +190,10 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		UPDATE events
 		SET title = $1, location = $2, event_date = $3
 		WHERE slug = $4
-		RETURNING id, slug, title, location, event_date, created_at
+		RETURNING id, slug, title, location, event_date, created_at, emoji
 	`, body.Title, body.Location, body.EventDate, slug).Scan(
 		&event.ID, &event.Slug, &event.Title, &event.Location,
-		&event.EventDate, &event.CreatedAt,
+		&event.EventDate, &event.CreatedAt, &event.Emoji,
 	)
 	if err == sql.ErrNoRows {
 		http.Error(w, "event not found", http.StatusNotFound)
