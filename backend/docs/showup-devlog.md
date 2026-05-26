@@ -986,3 +986,121 @@ Marked Done in Linear. Remaining cleanup: archived old `showup-frontend` and `sh
 ---
 
 *Tools: Claude Code · Anthropic Console · Fly.io · Vercel*
+
+---
+
+## Session 12 — May 26, 2026
+
+---
+
+### What We Built
+
+A fully dynamic OG preview card served as a 1200×630 PNG — rendered server-side in Go, with iMessage support, pixel-perfect Figma implementation, Inter fonts, the actual ollae logo, and an AI-picked emoji per event. Also shipped the emoji field end-to-end: Claude picks it during event creation, it renders faded in the card background and as a circle badge top-right.
+
+---
+
+### Issues Closed
+
+**MAT-71 — OG card: /og/:slug endpoint + og meta tags**
+
+---
+
+### How It Works
+
+**Routing (iMessage problem)**
+
+iMessage link previews are fetched from the device using a regular Safari UA — not a bot UA like `applebot`. UA-based conditional rewrites never trigger for iMessage.
+
+Solution: route every `/events/:slug` through the Go backend's `og-preview` handler, which returns an HTML page with full `og:*` meta tags and an immediate JS redirect to `?_src=app`. Vercel's `has.query` rule catches `?_src=app` and serves `index.html` (the SPA). iMessage reads the og tags and never executes JS. Regular users hit the redirect and land on the React app.
+
+**Image rendering**
+
+Used `fogleman/gg` — a Go 2D graphics library. Ruled out Satori (JS/Node, incompatible with the Go backend) and headless Chromium (too heavy for a simple PNG).
+
+Fonts embedded via `//go:embed`:
+- `Inter-Bold.ttf` and `Inter-Medium.ttf` from Inter v4.0 (GitHub releases)
+- `OpenMoji-black-glyf.ttf` for emoji (1.5 MB, monochrome glyf outlines — the only emoji font that works with Go's `opentype` package; Noto Emoji dropped their monochrome TTF in favor of COLRv1)
+
+**Pixel-perfect Figma layout**
+
+The Figma OG card uses `justify-content: space-between` across 4 sections: logo row, title+tagline, 72px spacer, meta+button. Replicated exactly:
+
+```
+gap = (534px innerHeight − totalSectionHeight) / 3
+```
+
+Each section's Y position computed dynamically so fonts at different sizes still distribute evenly.
+
+**Optical text centering**
+
+`fogleman/gg`'s `DrawStringAnchored` with `ay=0.5` centers using `fontHeight` (ascent + descent + line gap). This places the visual glyph above the optical center. Fixed with a `capCenter()` helper that reads `face.Metrics().CapHeight` and computes:
+
+```go
+baseline = boxY + (boxH + capH) / 2
+```
+
+Used for the RSVP button text. Same principle applied to the emoji circle badge using ascent/descent metrics.
+
+**DPI gotcha**
+
+`opentype.NewFace` with `DPI: 96` made fonts 33% larger than Figma's CSS px values. Fixed by using `DPI: 72` — at 72 DPI, 1pt = 1px, which matches Figma's font-size numbers exactly.
+
+**Emoji field**
+
+Added `emoji TEXT NOT NULL DEFAULT ''` to the `events` table. Two acquisition paths:
+- **NL parse path**: added `"emoji"` to the Claude system prompt — same Haiku call, no extra cost. Frontend stores it and sends it with the create request.
+- **Manual create path**: if `emoji` is absent from the create body, `CreateEvent` calls Claude separately to pick one based on the title (~1s extra latency, acceptable for a one-time operation).
+
+OG card renders the emoji twice: as a 540px faded (17% opacity) background element on the right, and as a 48px glyph inside a 96×96 circle badge top-right.
+
+**OG image URL**
+
+Original implementation hardcoded `https://ollae-backend.fly.dev/og/:slug` in the `og:image` meta tag — an internal infra URL leaking into public meta tags. Fixed by adding a Vercel proxy rewrite:
+
+```json
+{ "source": "/og/:slug", "destination": "https://ollae-backend.fly.dev/og/:slug" }
+```
+
+All public-facing OG image URLs are now `https://ollae.app/og/:slug`.
+
+---
+
+### Things That Tripped Us Up
+
+**Migration on the wrong database**
+
+`fly postgres connect -a showup-db` connects to the `postgres` default database. The actual app database is `showup_backend`. Running `ALTER TABLE` without `-d showup_backend` silently succeeded — on the wrong database. The backend returned 500 on every create because the column didn't exist in the right schema.
+
+Fix: always pass `-d showup_backend` explicitly. The cluster has three databases: `postgres` (default), `ollae_backend` (unused), `showup_backend` (live).
+
+**Noto Emoji dropped their monochrome TTF**
+
+The plan was `NotoEmoji-Regular.ttf` — ~500 KB, standard glyf outlines, compatible with Go's `opentype`. The file no longer exists in the repo; Google replaced it with COLRv1 and CBDT formats, neither of which Go can render. Switched to `OpenMoji-black-glyf.ttf` from OpenMoji v17.
+
+**Timezone regression**
+
+Session 07 fixed the RSVP page timezone bug by adding `new Date(...).toISOString()`. That same UTC conversion meant the OG card (running on a UTC server) displayed UTC time, not the user's local time. Fix: removed `toISOString()` and sent the local datetime string directly. The Fly.io server treats no-timezone strings as UTC, so the stored value matches what the user typed, and both the RSVP page and OG card display it correctly.
+
+---
+
+### Product Decisions Made
+
+| Decision | Rationale |
+|---|---|
+| One emoji per event, AI-picked | Adds personality to the OG card without any UX burden on the creator. |
+| Emoji picked at create time, not lazily | 1s latency on create is invisible; slow first OG render would be noticeable. |
+| Monochrome emoji (OpenMoji Black) | At 17% opacity on dark slate, color vs. monochrome is indistinguishable. Circle badge at full opacity looks intentional. |
+| OG image proxied through ollae.app | Internal fly.dev URLs in public meta tags are an implementation detail leaking into every iMessage preview. One rewrite rule, clean public surface. |
+
+---
+
+### Reflection
+
+The iMessage routing problem is a good case study in assumption failure. UA-based filtering sounds reasonable until you learn iMessage fetches previews from the device, making every request look like a regular Safari browser. Any solution based on UA sniffing misses it entirely. The fix — routing all event URLs through an og-preview endpoint with a JS redirect bypass — is elegant once you understand the constraint.
+
+The emoji field is small addition with outsized effect on shareability. An OG card with a relevant emoji reads as human and intentional. The single-call parse approach (one Claude request returns title, date, time, location, and emoji) keeps the cost at zero marginal per field — a useful pattern to remember when extending structured extraction.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · fogleman/gg · OpenMoji*
+*Tools: Claude Code · Linear · Figma MCP*
