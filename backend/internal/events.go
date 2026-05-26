@@ -30,7 +30,8 @@ type Response struct {
 }
 
 type EventHandlers struct {
-	DB *sql.DB
+	DB           *sql.DB
+	AnthropicKey string
 }
 
 func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {

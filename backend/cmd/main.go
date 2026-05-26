@@ -18,7 +18,7 @@ func main() {
 	}
 	db := internal.NewDB(dbURL)
 
-	h := &internal.EventHandlers{DB: db}
+	h := &internal.EventHandlers{DB: db, AnthropicKey: os.Getenv("ANTHROPIC_API_KEY")}
 
 	allowedOrigins := []string{"http://localhost:5173", "http://localhost:5174"}
 	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
@@ -39,6 +39,7 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	r.Post("/parse-event", h.ParseEvent)
 	r.Post("/events", h.CreateEvent)
 	r.Get("/events/{slug}", h.GetEvent)
 	r.Patch("/events/{slug}", h.UpdateEvent)
