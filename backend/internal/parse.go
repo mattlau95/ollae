@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -68,18 +70,33 @@ No explanation. No markdown. JSON only.`, today)
 
 	raw, _ := io.ReadAll(resp.Body)
 
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Anthropic API error %d: %s", resp.StatusCode, raw)
+		http.Error(w, "Claude API error", http.StatusBadGateway)
+		return
+	}
+
 	var apiResp struct {
 		Content []struct {
 			Text string `json:"text"`
 		} `json:"content"`
 	}
 	if err := json.Unmarshal(raw, &apiResp); err != nil || len(apiResp.Content) == 0 {
+		log.Printf("Unexpected Anthropic response: %s", raw)
 		http.Error(w, "unexpected Claude API response", http.StatusInternalServerError)
 		return
 	}
 
+	text := strings.TrimSpace(apiResp.Content[0].Text)
+	// Strip markdown code fences if model wrapped the JSON
+	text = strings.TrimPrefix(text, "```json")
+	text = strings.TrimPrefix(text, "```")
+	text = strings.TrimSuffix(text, "```")
+	text = strings.TrimSpace(text)
+
 	var parsed ParsedEvent
-	if err := json.Unmarshal([]byte(apiResp.Content[0].Text), &parsed); err != nil {
+	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
+		log.Printf("Failed to parse Claude JSON: %s", text)
 		http.Error(w, "failed to parse Claude response", http.StatusInternalServerError)
 		return
 	}
