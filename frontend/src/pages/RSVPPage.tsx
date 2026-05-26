@@ -175,13 +175,13 @@ export default function RSVPPage() {
               {/* I'm in */}
               <button
                 onClick={() => setStatus('in')}
-                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors overflow-visible ${
+                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors ${
                   status === 'in'
                     ? 'bg-[#DCFCE7] border-[#16A34A]'
                     : 'bg-bg-elevated border-white/[0.08]'
                 }`}
               >
-                <span className="text-[32px] leading-tight pb-1">✅</span>
+                <span className="text-[32px] leading-none">✅</span>
                 <span className={`text-base font-normal ${status === 'in' ? 'text-[#22C55E]' : 'text-text-primary'}`}>
                   I'm in
                 </span>
@@ -190,13 +190,13 @@ export default function RSVPPage() {
               {/* Can't make it */}
               <button
                 onClick={() => setStatus('out')}
-                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors overflow-visible ${
+                className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors ${
                   status === 'out'
                     ? 'bg-[#FEE2E2] border-[#DC2626]'
                     : 'bg-bg-elevated border-white/[0.08]'
                 }`}
               >
-                <span className={`text-[32px] leading-tight pb-1 ${status === 'out' ? '' : 'opacity-60'}`}>😔</span>
+                <span className={`text-[32px] leading-none ${status === 'out' ? '' : 'opacity-60'}`}>😔</span>
                 <span className={`text-base font-normal ${status === 'out' ? 'text-[#EF4444]' : 'text-text-primary'}`}>
                   Can't make it
                 </span>
