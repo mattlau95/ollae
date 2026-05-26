@@ -46,6 +46,26 @@ export default function RSVPPage() {
         setResponses(data.responses)
         document.title = `${data.event.title} · ollae.app`
         setLoading(false)
+
+        // og meta tags for JS-capable crawlers (Twitter, Slack, Discord)
+        const setMeta = (property: string, content: string) => {
+          let el = document.querySelector(`meta[property="${property}"]`) as HTMLMetaElement | null
+          if (!el) {
+            el = document.createElement('meta')
+            el.setAttribute('property', property)
+            document.head.appendChild(el)
+          }
+          el.setAttribute('content', content)
+        }
+        const origin = window.location.origin
+        const s = data.event.slug
+        setMeta('og:title', data.event.title)
+        setMeta('og:description', "Tap to see who's coming →")
+        setMeta('og:image', `${origin}/api/og/${s}`)
+        setMeta('og:image:width', '1200')
+        setMeta('og:image:height', '630')
+        setMeta('og:url', `${origin}/events/${s}`)
+        setMeta('og:type', 'website')
       })
       .catch(e => {
         setError(e.message)
