@@ -179,18 +179,13 @@ export default function CreatePage() {
         {/* Form view */}
         {(view === 'form' || !!slug) && (
           <>
-            {!slug && nlInput && (
-              <button
-                onClick={() => setView('nl')}
-                className="text-sm text-text-muted underline underline-offset-2 hover:opacity-70 transition-opacity self-start"
-              >
-                ← Try a different description
-              </button>
-            )}
-
             <div className={`flex flex-col gap-2 transition-opacity ${isLocked ? 'opacity-[0.45]' : ''}`}>
               <h1 className="text-[28px] font-semibold text-text-primary leading-tight">Create Event</h1>
-              <p className="text-sm text-text-muted">Fill in the details below, get a shareable link.</p>
+              <p className="text-sm text-text-muted">
+                {nlInput && !slug
+                  ? "Here's what we found — give it a look before creating."
+                  : 'Fill in the details below, get a shareable link.'}
+              </p>
             </div>
 
             <div className={`flex flex-col gap-3 transition-opacity ${isLocked ? 'opacity-[0.45] pointer-events-none' : ''}`}>
@@ -205,24 +200,25 @@ export default function CreatePage() {
                 />
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-normal text-text-primary">Date</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={e => { setDate(e.target.value); clearAssumed('date') }}
-                  className={fieldClass('date')}
-                />
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-normal text-text-primary">Time</label>
-                <input
-                  type="time"
-                  value={time}
-                  onChange={e => { setTime(e.target.value); clearAssumed('time') }}
-                  className={fieldClass('time')}
-                />
+              <div className="flex gap-3">
+                <div className="flex flex-col gap-2 flex-1">
+                  <label className="text-xs font-normal text-text-primary">Date</label>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={e => { setDate(e.target.value); clearAssumed('date') }}
+                    className={fieldClass('date')}
+                  />
+                </div>
+                <div className="flex flex-col gap-2 flex-1">
+                  <label className="text-xs font-normal text-text-primary">Time</label>
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={e => { setTime(e.target.value); clearAssumed('time') }}
+                    className={fieldClass('time')}
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -236,6 +232,10 @@ export default function CreatePage() {
                 />
               </div>
             </div>
+
+            {nlInput && !slug && !isEditing && (
+              <p className="text-base font-medium text-text-primary">Looks good?</p>
+            )}
 
             <button
               onClick={
@@ -254,8 +254,23 @@ export default function CreatePage() {
                 ? (submitting ? 'Saving...' : 'Save Changes ->')
                 : slug
                 ? 'Edit Event Details'
-                : (submitting ? 'Creating...' : 'Create Event ->')}
+                : submitting
+                ? 'Creating...'
+                : nlInput
+                ? 'Yes! Create the Event →'
+                : 'Create Event →'}
             </button>
+
+            {!slug && nlInput && (
+              <div className="flex justify-center">
+                <button
+                  onClick={() => setView('nl')}
+                  className="text-sm text-text-muted underline underline-offset-2 hover:opacity-70 transition-opacity"
+                >
+                  ← Try a different description
+                </button>
+              </div>
+            )}
 
             <div className="flex-1 max-h-12" />
 
