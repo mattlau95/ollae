@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  /* Figma design — dark slate palette */
+  --color-bg-base: #0F172A;
+  --color-bg-surface: #273548;
+  --color-bg-elevated: #1E293B;
+
+  /* Text */
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #94A3B8;
+  --color-text-disabled: #64748B;
+
+  /* Borders */
+  --color-border: #334155;
+  --color-border-focus: rgba(255, 255, 255, 0.24);
+
+  /* Status colors */
+  --color-status-in: #22c55e;
+  --color-status-in-bg: #052e16;
+  --color-status-in-border: #15803d;
+  --color-status-out: #ef4444;
+  --color-status-out-bg: #2d0707;
+  --color-status-out-border: #b91c1c;
+  --color-status-remind: #a78bfa;
+  --color-status-remind-bg: #1e1030;
+  --color-status-remind-border: #7c3aed;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 8px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-bg-base);
+  color: var(--color-text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
