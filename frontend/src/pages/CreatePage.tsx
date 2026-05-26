@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://showup-backend.fly.dev'
+const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://ollae-backend.fly.dev'
 
 export default function CreatePage() {
   useEffect(() => { document.title = 'Create Event · ollae.app' }, [])

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
-const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://showup-backend.fly.dev'
+const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://ollae-backend.fly.dev'
 
 type Response = {
   id: string

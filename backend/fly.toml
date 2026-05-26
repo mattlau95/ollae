@@ -1,4 +1,4 @@
-app = 'showup-backend'
+app = 'ollae-backend'
 primary_region = 'ewr'
 
 [build]
