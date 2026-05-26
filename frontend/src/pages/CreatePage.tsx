@@ -145,10 +145,10 @@ export default function CreatePage() {
           <div className="flex flex-col gap-4 flex-1">
             <div className="flex flex-col gap-2">
               <h1 className="text-[28px] font-semibold text-text-primary leading-tight">Create Event</h1>
-              <p className="text-sm text-text-muted">Describe it — Claude will fill in the details.</p>
+              <p className="text-sm text-text-muted">Describe it — our integrated Claude API will fill in the details.</p>
             </div>
             <textarea
-              placeholder={"Volleyball Saturday 2pm\nVenice Beach Court 4"}
+              placeholder={"e.g. Volleyball this Saturday at 2pm, Venice Beach Court 4"}
               value={nlInput}
               onChange={e => setNlInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleParse() } }}
