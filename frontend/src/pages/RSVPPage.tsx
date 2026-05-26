@@ -181,7 +181,7 @@ export default function RSVPPage() {
                     : 'bg-bg-elevated border-white/[0.08]'
                 }`}
               >
-                <span className="text-[24px] leading-none">✅</span>
+                <span className="text-[32px] leading-tight">✅</span>
                 <span className={`text-base font-normal ${status === 'in' ? 'text-[#22C55E]' : 'text-text-primary'}`}>
                   I'm in
                 </span>
@@ -196,7 +196,7 @@ export default function RSVPPage() {
                     : 'bg-bg-elevated border-white/[0.08]'
                 }`}
               >
-                <span className={`text-[24px] leading-none ${status === 'out' ? '' : 'opacity-60'}`}>😔</span>
+                <span className={`text-[32px] leading-tight ${status === 'out' ? '' : 'opacity-60'}`}>😔</span>
                 <span className={`text-base font-normal ${status === 'out' ? 'text-[#EF4444]' : 'text-text-primary'}`}>
                   Can't make it
                 </span>
