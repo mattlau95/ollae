@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/events/:slug", "destination": "/index.html" },
+    { "source": "/create", "destination": "/index.html" }
+  ]
 }
