@@ -431,29 +431,44 @@ export default function RSVPPage() {
               </button>
             </div>
             {status === 'remind_me' && (
-              <input
-                type="email"
-                placeholder="Your email address"
-                value={notifyVia}
-                onChange={e => setNotifyVia(e.target.value)}
-                autoFocus
-                className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary placeholder-text-muted border border-status-remind/50 focus:outline-none focus:border-status-remind transition-colors"
-              />
+              <div className="flex flex-col gap-3">
+                <input
+                  type="email"
+                  placeholder="Your email address"
+                  value={notifyVia}
+                  onChange={e => setNotifyVia(e.target.value)}
+                  autoFocus
+                  className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary placeholder-text-muted border border-status-remind/50 focus:outline-none focus:border-status-remind transition-colors"
+                />
+                <button
+                  onClick={handleSubmit}
+                  disabled={!canSubmit || submitting}
+                  className={`w-full py-4 rounded-xl text-xl font-normal border transition-colors ${
+                    canSubmit
+                      ? 'bg-[#F59E0B] text-[#F8FAFC] border-[#F8FAFC] hover:opacity-90'
+                      : 'bg-bg-surface text-text-muted border-white/[0.08] cursor-not-allowed'
+                  }`}
+                >
+                  {submitting ? 'Submitting...' : 'Remind me →'}
+                </button>
+              </div>
             )}
           </div>
 
-          {/* Submit */}
-          <button
-            onClick={handleSubmit}
-            disabled={!canSubmit || submitting}
-            className={`w-full py-4 rounded-xl text-xl font-normal border transition-colors ${
-              canSubmit
-                ? 'bg-[#F59E0B] text-[#F8FAFC] border-[#F8FAFC] hover:opacity-90'
-                : 'bg-bg-surface text-text-muted border-white/[0.08] cursor-not-allowed'
-            }`}
-          >
-            {submitting ? 'Submitting...' : status === 'in' && guests > 0 ? "We're in! →" : 'Submit →'}
-          </button>
+          {/* Submit — hidden for remind_me (that flow has its own button) */}
+          {status !== 'remind_me' && (
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit || submitting}
+              className={`w-full py-4 rounded-xl text-xl font-normal border transition-colors ${
+                canSubmit
+                  ? 'bg-[#F59E0B] text-[#F8FAFC] border-[#F8FAFC] hover:opacity-90'
+                  : 'bg-bg-surface text-text-muted border-white/[0.08] cursor-not-allowed'
+              }`}
+            >
+              {submitting ? 'Submitting...' : status === 'in' && guests > 0 ? "We're in! →" : 'Submit →'}
+            </button>
+          )}
         </div>
 
       </div>
