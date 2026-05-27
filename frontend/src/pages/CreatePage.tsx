@@ -204,7 +204,7 @@ export default function CreatePage() {
               </div>
 
               <div className="flex gap-3">
-                <div className="flex flex-col gap-2 flex-1">
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
                   <label className="text-xs font-normal text-text-primary">Date</label>
                   <input
                     type="date"
@@ -213,7 +213,7 @@ export default function CreatePage() {
                     className={fieldClass('date')}
                   />
                 </div>
-                <div className="flex flex-col gap-2 flex-1">
+                <div className="flex flex-col gap-2 flex-1 min-w-0">
                   <label className="text-xs font-normal text-text-primary">Time</label>
                   <input
                     type="time"

@@ -285,20 +285,28 @@ function statusText(status: string) {
   return map[status] ?? status
 }
 
+// Strip any timezone suffix (Z or ±HH:MM) so JS treats the timestamp as
+// the wall-clock time the organizer entered, not a UTC moment to convert.
+// Postgres stores TIMESTAMPTZ and returns a Z-suffixed string, but for
+// ollae events the stored time is already the intended local time.
+function parseAsWallClock(dateStr: string) {
+  return new Date(dateStr.replace(/Z$|[+-]\d{2}:\d{2}$/, ''))
+}
+
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  return parseAsWallClock(dateStr).toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
 }
 
 function formatTime(dateStr: string) {
-  return new Date(dateStr).toLocaleTimeString('en-US', {
+  return parseAsWallClock(dateStr).toLocaleTimeString('en-US', {
     hour: 'numeric', minute: '2-digit', hour12: true,
   })
 }
 
 function hasTime(dateStr: string) {
-  const d = new Date(dateStr)
+  const d = parseAsWallClock(dateStr)
   return d.getHours() !== 0 || d.getMinutes() !== 0
 }
 

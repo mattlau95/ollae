@@ -11,6 +11,28 @@ import (
 	"github.com/mattlau95/ollae-backend/internal"
 )
 
+// headToGet converts HEAD requests to GET so chi routes them to the registered
+// GET handler, then strips the response body. This satisfies crawlers (e.g.
+// Facebook's scraper linter) that send HEAD to validate the page and image URLs.
+func headToGet(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodHead {
+			r.Method = http.MethodGet
+			next.ServeHTTP(&noBodyWriter{ResponseWriter: w}, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// noBodyWriter wraps ResponseWriter and silently discards all body writes,
+// used so HEAD responses include correct headers but no body bytes.
+type noBodyWriter struct {
+	http.ResponseWriter
+}
+
+func (noBodyWriter) Write([]byte) (int, error) { return 0, nil }
+
 func main() {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -28,9 +50,13 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// Convert HEAD requests to GET so chi finds the registered handler,
+	// then discard the response body — required for Facebook's scraper linter
+	// which sends HEAD to validate the page URL and og:image URL.
+	r.Use(headToGet)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: allowedOrigins,
-		AllowedMethods: []string{"GET", "POST", "PATCH", "OPTIONS"},
+		AllowedMethods: []string{"GET", "HEAD", "POST", "PATCH", "OPTIONS"},
 		AllowedHeaders: []string{"Content-Type"},
 	}))
 
