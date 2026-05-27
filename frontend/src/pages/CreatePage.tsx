@@ -18,11 +18,15 @@ export default function CreatePage() {
   const [emoji, setEmoji] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [slug, setSlug] = useState<string | null>(null)
+  const [adminToken, setAdminToken] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [copiedAdmin, setCopiedAdmin] = useState(false)
 
   const eventUrl = slug ? `${window.location.origin}/events/${slug}` : ''
   const displayUrl = slug ? `${window.location.hostname}/events/${slug}` : ''
+  const adminUrl = slug && adminToken ? `${window.location.origin}/events/${slug}?admin=${adminToken}` : ''
+  const adminDisplayUrl = slug && adminToken ? `${window.location.hostname}/events/${slug}?admin=…` : ''
   const canCreate = title.trim().length > 0
 
   function buildEventDate() {
@@ -92,6 +96,7 @@ export default function CreatePage() {
       if (!res.ok) throw new Error('Failed to create event')
       const event = await res.json()
       setSlug(event.slug)
+      setAdminToken(event.admin_token ?? null)
     } catch {
       alert('Something went wrong. Try again.')
     } finally {
@@ -103,7 +108,8 @@ export default function CreatePage() {
     if (!slug || !canCreate) return
     setSubmitting(true)
     try {
-      const res = await fetch(`${API}/events/${slug}`, {
+      const url = adminToken ? `${API}/events/${slug}?admin=${adminToken}` : `${API}/events/${slug}`
+      const res = await fetch(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -125,6 +131,12 @@ export default function CreatePage() {
     navigator.clipboard.writeText(eventUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  function handleCopyAdmin() {
+    navigator.clipboard.writeText(adminUrl)
+    setCopiedAdmin(true)
+    setTimeout(() => setCopiedAdmin(false), 2000)
   }
 
   const isLocked = !!slug && !isEditing
@@ -278,25 +290,53 @@ export default function CreatePage() {
             <div className="flex-1 max-h-12" />
 
             {slug && (
-              <div className="flex flex-col gap-3">
-                <h2 className="text-[28px] font-semibold text-text-primary leading-tight">Share this link</h2>
-                <button
-                  onClick={handleCopy}
-                  className="bg-bg-elevated rounded-2xl p-6 flex flex-col gap-2 text-left w-full active:opacity-70 transition-opacity"
-                >
-                  <p className="text-[11px] font-semibold text-text-muted text-center w-full uppercase tracking-wide">
-                    Your shareable link
-                  </p>
-                  <p className="text-base font-semibold text-[#F59E0B] text-center w-full truncate">
-                    {displayUrl}
-                  </p>
-                  <div className="flex items-center justify-center gap-2 mt-1">
-                    <CopyIcon />
-                    <span className="text-base font-semibold text-text-muted">
-                      {copied ? 'Copied!' : 'tap to copy'}
-                    </span>
+              <div className="flex flex-col gap-5">
+                <div className="flex flex-col gap-3">
+                  <h2 className="text-[28px] font-semibold text-text-primary leading-tight">Share this link</h2>
+                  <button
+                    onClick={handleCopy}
+                    className="bg-bg-elevated rounded-2xl p-6 flex flex-col gap-2 text-left w-full active:opacity-70 transition-opacity"
+                  >
+                    <p className="text-[11px] font-semibold text-text-muted text-center w-full uppercase tracking-wide">
+                      Your shareable link
+                    </p>
+                    <p className="text-base font-semibold text-[#F59E0B] text-center w-full truncate">
+                      {displayUrl}
+                    </p>
+                    <div className="flex items-center justify-center gap-2 mt-1">
+                      <CopyIcon />
+                      <span className="text-base font-semibold text-text-muted">
+                        {copied ? 'Copied!' : 'tap to copy'}
+                      </span>
+                    </div>
+                  </button>
+                </div>
+
+                {adminUrl && (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                      <h2 className="text-[20px] font-semibold text-text-primary leading-tight">Save this to edit later</h2>
+                      <p className="text-xs text-text-muted">Don't share — this link lets anyone edit your event.</p>
+                    </div>
+                    <button
+                      onClick={handleCopyAdmin}
+                      className="bg-bg-elevated rounded-2xl p-6 flex flex-col gap-2 text-left w-full active:opacity-70 transition-opacity"
+                    >
+                      <p className="text-[11px] font-semibold text-text-muted text-center w-full uppercase tracking-wide">
+                        Your edit link
+                      </p>
+                      <p className="text-base font-semibold text-text-muted text-center w-full truncate">
+                        {adminDisplayUrl}
+                      </p>
+                      <div className="flex items-center justify-center gap-2 mt-1">
+                        <CopyIcon />
+                        <span className="text-base font-semibold text-text-muted">
+                          {copiedAdmin ? 'Copied!' : 'tap to copy'}
+                        </span>
+                      </div>
+                    </button>
                   </div>
-                </button>
+                )}
               </div>
             )}
           </>

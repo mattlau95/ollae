@@ -16,13 +16,14 @@ import (
 )
 
 type Event struct {
-	ID        string     `json:"id"`
-	Slug      string     `json:"slug"`
-	Title     string     `json:"title"`
-	Location  string     `json:"location"`
-	EventDate *time.Time `json:"event_date"`
-	CreatedAt time.Time  `json:"created_at"`
-	Emoji     string     `json:"emoji"`
+	ID         string     `json:"id"`
+	Slug       string     `json:"slug"`
+	Title      string     `json:"title"`
+	Location   string     `json:"location"`
+	EventDate  *time.Time `json:"event_date"`
+	CreatedAt  time.Time  `json:"created_at"`
+	Emoji      string     `json:"emoji"`
+	AdminToken string     `json:"admin_token,omitempty"` // only returned on create
 }
 
 type Response struct {
@@ -99,15 +100,20 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to generate slug", http.StatusInternalServerError)
 		return
 	}
+	adminToken, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 24)
+	if err != nil {
+		http.Error(w, "failed to generate token", http.StatusInternalServerError)
+		return
+	}
 
 	var event Event
 	err = h.DB.QueryRow(`
-		INSERT INTO events (slug, title, location, event_date, emoji)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, slug, title, location, event_date, created_at, emoji
-	`, slug, body.Title, body.Location, body.EventDate, emoji).Scan(
+		INSERT INTO events (slug, title, location, event_date, emoji, admin_token)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, slug, title, location, event_date, created_at, emoji, admin_token
+	`, slug, body.Title, body.Location, body.EventDate, emoji, adminToken).Scan(
 		&event.ID, &event.Slug, &event.Title, &event.Location,
-		&event.EventDate, &event.CreatedAt, &event.Emoji,
+		&event.EventDate, &event.CreatedAt, &event.Emoji, &event.AdminToken,
 	)
 	if err != nil {
 		http.Error(w, "failed to create event", http.StatusInternalServerError)
@@ -171,6 +177,12 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
+	adminToken := r.URL.Query().Get("admin")
+	if adminToken == "" {
+		http.Error(w, "admin token required", http.StatusUnauthorized)
+		return
+	}
+
 	var body struct {
 		Title     string  `json:"title"`
 		Location  string  `json:"location"`
@@ -189,14 +201,14 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	err := h.DB.QueryRow(`
 		UPDATE events
 		SET title = $1, location = $2, event_date = $3
-		WHERE slug = $4
+		WHERE slug = $4 AND admin_token = $5
 		RETURNING id, slug, title, location, event_date, created_at, emoji
-	`, body.Title, body.Location, body.EventDate, slug).Scan(
+	`, body.Title, body.Location, body.EventDate, slug, adminToken).Scan(
 		&event.ID, &event.Slug, &event.Title, &event.Location,
 		&event.EventDate, &event.CreatedAt, &event.Emoji,
 	)
 	if err == sql.ErrNoRows {
-		http.Error(w, "event not found", http.StatusNotFound)
+		http.Error(w, "event not found or invalid token", http.StatusForbidden)
 		return
 	}
 	if err != nil {

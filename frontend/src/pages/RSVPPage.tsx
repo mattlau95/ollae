@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://ollae-backend.fly.dev'
 
@@ -23,6 +23,9 @@ type RSVPStatus = 'in' | 'out' | 'remind_me' | null
 
 export default function RSVPPage() {
   const { slug } = useParams<{ slug: string }>()
+  const [searchParams] = useSearchParams()
+  const adminToken = searchParams.get('admin')
+  const isAdmin = !!adminToken
 
   const [event, setEvent] = useState<Event | null>(null)
   const [responses, setResponses] = useState<Response[]>([])
@@ -35,6 +38,14 @@ export default function RSVPPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
+  // Edit state (admin only)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDate, setEditDate] = useState('')
+  const [editTime, setEditTime] = useState('')
+  const [editLocation, setEditLocation] = useState('')
+  const [saving, setSaving] = useState(false)
+
   useEffect(() => {
     fetch(`${API}/events/${slug}`)
       .then(r => {
@@ -46,6 +57,19 @@ export default function RSVPPage() {
         setResponses(data.responses)
         document.title = `${data.event.title} · ollae.app`
         setLoading(false)
+
+        // Pre-fill edit form fields
+        setEditTitle(data.event.title)
+        setEditLocation(data.event.location ?? '')
+        if (data.event.event_date) {
+          const stripped = data.event.event_date.replace(/Z$|[+-]\d{2}:\d{2}$/, '')
+          const [datePart, timePart] = stripped.split('T')
+          setEditDate(datePart ?? '')
+          if (timePart) {
+            const [h, m] = timePart.split(':')
+            setEditTime(`${h}:${m}`)
+          }
+        }
 
         // og meta tags for JS-capable crawlers (Twitter, Slack, Discord)
         const setMeta = (property: string, content: string) => {
@@ -72,6 +96,33 @@ export default function RSVPPage() {
         setLoading(false)
       })
   }, [slug])
+
+  async function handleSaveEdit() {
+    if (!slug || !adminToken || !editTitle.trim()) return
+    setSaving(true)
+    try {
+      const eventDate = editDate
+        ? (editTime ? `${editDate}T${editTime}:00` : `${editDate}T00:00:00`)
+        : undefined
+      const res = await fetch(`${API}/events/${slug}?admin=${adminToken}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          location: editLocation.trim() || undefined,
+          event_date: eventDate,
+        }),
+      })
+      if (!res.ok) throw new Error('Failed to save')
+      const updated: Event = await res.json()
+      setEvent(updated)
+      setIsEditing(false)
+    } catch {
+      alert('Something went wrong. Try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   async function handleSubmit() {
     if (!name.trim() || !status) return
@@ -133,7 +184,75 @@ export default function RSVPPage() {
             if (parts.length === 0) return null
             return <p className="text-[13px] font-bold text-text-muted mt-1">{parts.join(' · ')}</p>
           })()}
+          {isAdmin && !isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="self-start text-xs text-text-muted underline underline-offset-2 hover:opacity-70 transition-opacity mt-1"
+            >
+              ✏️ Edit event
+            </button>
+          )}
         </div>
+
+        {/* Admin edit form */}
+        {isAdmin && isEditing && (
+          <div className="flex flex-col gap-3 bg-bg-elevated rounded-2xl p-5">
+            <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">Edit Event</p>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-text-primary">Event Name</label>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={e => setEditTitle(e.target.value)}
+                className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary border border-white/[0.08] focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-2 flex-1 min-w-0">
+                <label className="text-xs text-text-primary">Date</label>
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={e => setEditDate(e.target.value)}
+                  className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary border border-white/[0.08] focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]"
+                />
+              </div>
+              <div className="flex flex-col gap-2 flex-1 min-w-0">
+                <label className="text-xs text-text-primary">Time</label>
+                <input
+                  type="time"
+                  value={editTime}
+                  onChange={e => setEditTime(e.target.value)}
+                  className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary border border-white/[0.08] focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]"
+                />
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-text-primary">Location</label>
+              <input
+                type="text"
+                value={editLocation}
+                onChange={e => setEditLocation(e.target.value)}
+                className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary border border-white/[0.08] focus:outline-none focus:border-white/25 transition-colors [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex gap-3 mt-1">
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editTitle.trim() || saving}
+                className="flex-1 py-3 rounded-xl text-base font-normal border transition-colors bg-[#F59E0B] text-[#F8FAFC] border-[#F8FAFC] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => setIsEditing(false)}
+                className="flex-1 py-3 rounded-xl text-base font-normal border border-white/[0.08] text-text-muted hover:opacity-70 transition-opacity"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Attending count + activity feed */}
         <div className="flex flex-col gap-4">
