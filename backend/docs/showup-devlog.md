@@ -1164,3 +1164,100 @@ The stale serverless function is a good reminder that Vercel deploys the git tre
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · fogleman/gg · OpenMoji*
 *Tools: Claude Code · Linear · Figma MCP*
+
+---
+
+## Session 14 — May 27, 2026
+
+---
+
+### What We Built
+
+Three bug fixes caught from iPhone screenshots, and MAT-72 — a full admin token system that gives event organizers a persistent edit link without requiring accounts.
+
+---
+
+### Issues Closed
+
+**MAT-72 — Organizer admin token system for event editing**
+
+Previously, closing the create page meant losing all ability to edit the event. No accounts, no persistence. Fixed with a dual-link system:
+
+- `POST /events` now generates a 24-char nanoid `admin_token` and returns it alongside the slug
+- `PATCH /events/:slug` now requires `?admin=TOKEN` and validates with `WHERE slug = $1 AND admin_token = $2` — wrong or missing token returns 403. One query does both the auth check and the update.
+- CreatePage shows two links after creation: the public share link and an edit link labeled "Save this to edit later — don't share"
+- RSVPPage reads `?admin=TOKEN` via `useSearchParams`. When present, an "✏️ Edit event" button appears that expands an inline edit form pre-filled from the current event data. Save calls PATCH with the token; on success the event display updates in place.
+- Vercel rewrite: added a `has: { type: query, key: admin }` rule so `?admin=TOKEN` URLs serve `index.html` directly instead of going through the og-preview handler (which would JS-redirect to `?_src=app`, dropping the token).
+- Auto-scroll: after event creation the page smooth-scrolls the "Edit Event Details" button into view so both share cards are visible on mobile.
+
+Database migration: `ALTER TABLE events ADD COLUMN IF NOT EXISTS admin_token TEXT NOT NULL DEFAULT ''`. Existing events get an empty token and are effectively locked from editing — acceptable since there was no persistent edit access before anyway.
+
+---
+
+### Bug Fixes
+
+**Date/Time input overlap on mobile**
+
+The Date and Time inputs in the Create Event form share a `flex` row with `flex-1` on each column. iOS native `<input type="date">` has a large intrinsic content width ("May 27, 2026") that won't shrink below its natural size in flexbox without `min-w-0`. The Time input was being pushed off the right edge of the screen.
+
+Fix: `min-w-0` on both flex children. Standard Tailwind fix for this class of flex overflow.
+
+**Event time shows wrong on RSVP page (timezone offset)**
+
+User entered 10:00 PM; the RSVP page showed 6:00 PM — exactly 4 hours off (EDT, UTC−4).
+
+Root cause: `buildEventDate()` sends `2026-05-27T22:00:00` (no timezone info). PostgreSQL's `TIMESTAMPTZ` column interprets the naive string as UTC and stores it that way. The backend returns `2026-05-27T22:00:00Z`. JavaScript's `new Date("...Z")` converts UTC to local time, so EDT viewers see 6:00 PM.
+
+Fix: `parseAsWallClock()` in RSVPPage strips the `Z` suffix before constructing the `Date` object, so JS treats the stored value as the wall-clock time the organizer entered. `formatDate`, `formatTime`, and `hasTime` all use it. This is a display-layer fix — the semantic model is "store wall-clock time as UTC, display as entered."
+
+**Facebook OG: HEAD requests returning 405**
+
+Every route in the Go backend is registered with `r.Get(...)`. chi does not automatically handle HEAD for GET routes, so HEAD requests returned 405 Method Not Allowed. Facebook's scraper linter sends HEAD to validate both the page URL and the `og:image` URL before rendering a card.
+
+Fix: `headToGet` middleware added to the chi router. It converts any incoming HEAD request to GET (mutating `r.Method`), wraps the `ResponseWriter` in a `noBodyWriter` that discards all `Write` calls, then passes through to the normal handler. The response headers (Content-Type, Cache-Control) are set correctly; the body is silently dropped. Also added `HEAD` to the CORS `AllowedMethods` list. Facebook's cache was flushed manually via the Sharing Debugger after deployment.
+
+---
+
+### Issues Created
+
+**MAT-89 — RSVP +1 / bring guests support**
+
+Users sometimes want to RSVP for a group without submitting separate entries. Proposed: a guest count selector (just me / +1 / +2 / +3) that appears after selecting "I'm in", with submit button text changing to "We're in! →" when guests > 0. Attending count would reflect total headcount. Parked in backlog.
+
+---
+
+### Things That Tripped Us Up
+
+**TypeScript "used before declaration" in React components**
+
+A `useEffect` referencing `slug` and `isEditing` was placed before those `useState` declarations in the component function. TypeScript's strict mode flags this as TS2448 (block-scoped variable used before declaration), even though the callback only runs after all declarations have executed. The local `tsc --noEmit` passed; the Vercel build caught it. Fix: move `useEffect` calls that reference state to after all `useState`/`useRef` declarations.
+
+**`?admin=TOKEN` dropped by og-preview redirect**
+
+The Vercel rewrite sends any `/events/:slug` request without `?_src=app` to the Go og-preview handler. That handler returns HTML with a JS `location.replace()` to `?_src=app`. When the organizer visits their admin link, the redirect fires and drops the token — the SPA loaded but `useSearchParams().get('admin')` returned null.
+
+Fix: added a `has: { type: query, key: admin }` rewrite rule in `vercel.json` before the og-preview catch-all. Rewrite rule order matters — first match wins.
+
+---
+
+### Product Decisions Made
+
+| Decision | Rationale |
+|---|---|
+| Empty token default for existing events | Simpler migration than generating tokens for all existing rows. Pre-MAT-72 events had no persistent edit access anyway — locking them is consistent with prior behavior. |
+| Wall-clock time model (no timezone info) | ollae events are informal and local. Storing and displaying the time as entered is what organizers expect. Viewers in different timezones don't get automatic conversion — acceptable for this use case. |
+| Token in query param, not header | The admin link needs to work by tapping a URL in a message thread. Headers aren't part of a URL. Query param is the only option for a link-based auth model. |
+| `WHERE slug = $1 AND admin_token = $2` in UPDATE | Single query does auth check and update atomically. `sql.ErrNoRows` means either the slug doesn't exist or the token is wrong — no need to distinguish the two cases. |
+
+---
+
+### Reflection
+
+The timezone bug is a recurring theme in this project. The root cause is always the same: `TIMESTAMPTZ` + naive string input + `new Date("...Z")` display = automatic UTC→local conversion that nobody asked for. The wall-clock model (strip the Z, display as entered) is the right answer for this class of app. If your app stores "the time someone said" rather than "a UTC moment in time", opt out of automatic timezone conversion at the display layer.
+
+The admin token feature shows how much product surface you can cover without accounts. A 24-char opaque token in a URL is sufficient for casual private events — the organizer has it, no one else does, and it's as persistent as any link. Phase 2 can layer real accounts on top without schema changes.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · fogleman/gg · OpenMoji*
+*Tools: Claude Code · Linear*
