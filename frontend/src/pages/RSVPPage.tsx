@@ -7,6 +7,7 @@ type Response = {
   id: string
   name: string
   status: 'in' | 'out' | 'remind_me'
+  guests: number
   created_at: string
 }
 
@@ -35,8 +36,14 @@ export default function RSVPPage() {
 
   const [name, setName] = useState('')
   const [status, setStatus] = useState<RSVPStatus>(null)
+  const [guests, setGuests] = useState(0)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+
+  function handleSetStatus(s: RSVPStatus) {
+    setStatus(s)
+    if (s !== 'in') setGuests(0)
+  }
 
   // Edit state (admin only)
   const [isEditing, setIsEditing] = useState(false)
@@ -131,7 +138,7 @@ export default function RSVPPage() {
       const res = await fetch(`${API}/events/${slug}/rsvp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), status }),
+        body: JSON.stringify({ name: name.trim(), status, guests }),
       })
       if (!res.ok) throw new Error('Failed to submit')
       const updated: Response[] = await res.json()
@@ -156,9 +163,9 @@ export default function RSVPPage() {
     </div>
   )
 
-  if (submitted) return <SuccessScreen name={name} status={status!} onBack={() => setSubmitted(false)} />
+  if (submitted) return <SuccessScreen name={name} status={status!} guests={guests} onBack={() => setSubmitted(false)} />
 
-  const attendingCount = responses.filter(r => r.status === 'in').length
+  const attendingCount = responses.filter(r => r.status === 'in').reduce((sum, r) => sum + 1 + (r.guests || 0), 0)
   const sorted = [...responses].reverse()
   const visible = showAll ? sorted : sorted.slice(0, 8)
   const canSubmit = !!(name.trim() && status)
@@ -268,7 +275,7 @@ export default function RSVPPage() {
                   {visible.map(r => (
                     <p key={r.id} className="text-base text-text-muted leading-[150%] pb-4">
                       <span className="text-text-primary font-medium">{r.name}</span>
-                      {' '}{statusText(r.status)}{' · '}{timeAgo(r.created_at)}
+                      {' '}{statusText(r.status, r.guests)}{' · '}{timeAgo(r.created_at)}
                     </p>
                   ))}
                 </div>
@@ -313,7 +320,7 @@ export default function RSVPPage() {
             <div className="flex gap-4">
               {/* I'm in */}
               <button
-                onClick={() => setStatus('in')}
+                onClick={() => handleSetStatus('in')}
                 className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors ${
                   status === 'in'
                     ? 'bg-[#DCFCE7] border-[#16A34A]'
@@ -328,7 +335,7 @@ export default function RSVPPage() {
 
               {/* Can't make it */}
               <button
-                onClick={() => setStatus('out')}
+                onClick={() => handleSetStatus('out')}
                 className={`flex-1 flex flex-col items-center justify-center gap-4 py-5 px-8 rounded-xl border transition-colors ${
                   status === 'out'
                     ? 'bg-[#FEE2E2] border-[#DC2626]'
@@ -341,12 +348,41 @@ export default function RSVPPage() {
                 </span>
               </button>
             </div>
+
+            {/* Guest picker — shown when I'm in */}
+            {status === 'in' && (
+              <div className="flex flex-col gap-3">
+                <p className="text-sm text-text-muted text-center">How many spots do you need?</p>
+                <div className="flex gap-2 justify-center flex-wrap">
+                  {[
+                    { label: 'Just me', value: 0 },
+                    { label: '+1', value: 1 },
+                    { label: '+2', value: 2 },
+                    { label: '+3', value: 3 },
+                    { label: '+4', value: 4 },
+                    { label: '+5', value: 5 },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setGuests(opt.value)}
+                      className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                        guests === opt.value
+                          ? 'bg-[#22C55E] border-[#16A34A] text-white'
+                          : 'bg-bg-elevated border-white/[0.08] text-text-primary hover:border-white/25'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Not sure yet */}
           <div className="flex justify-center">
             <button
-              onClick={() => setStatus('remind_me')}
+              onClick={() => handleSetStatus('remind_me')}
               className={`text-base underline underline-offset-2 transition-opacity hover:opacity-70 ${
                 status === 'remind_me' ? 'text-status-remind' : 'text-text-primary'
               }`}
@@ -365,7 +401,7 @@ export default function RSVPPage() {
                 : 'bg-bg-surface text-text-muted border-white/[0.08] cursor-not-allowed'
             }`}
           >
-            {submitting ? 'Submitting...' : 'Submit ->'}
+            {submitting ? 'Submitting...' : status === 'in' && guests > 0 ? "We're in! →" : 'Submit →'}
           </button>
         </div>
 
@@ -374,10 +410,11 @@ export default function RSVPPage() {
   )
 }
 
-function SuccessScreen({ name, status, onBack }: { name: string; status: RSVPStatus; onBack: () => void }) {
+function SuccessScreen({ name, status, guests, onBack }: { name: string; status: RSVPStatus; guests: number; onBack: () => void }) {
   const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'
   const message = status === 'in' ? "You're on the list!" : status === 'out' ? "Got it, you're out." : "We'll remind you!"
-  const statusLine = status === 'in' ? `${name} · I'm in 🏐` : status === 'out' ? `${name} · Can't make it 😔` : `${name} · Remind me 🔔`
+  const guestSuffix = status === 'in' && guests > 0 ? ` (+${guests})` : ''
+  const statusLine = status === 'in' ? `${name}${guestSuffix} · I'm in 🏐` : status === 'out' ? `${name} · Can't make it 😔` : `${name} · Remind me 🔔`
   const statusColor = status === 'in' ? 'text-[#22C55E]' : status === 'out' ? 'text-[#EF4444]' : 'text-status-remind'
 
   return (
@@ -395,13 +432,11 @@ function SuccessScreen({ name, status, onBack }: { name: string; status: RSVPSta
   )
 }
 
-function statusText(status: string) {
-  const map: Record<string, string> = {
-    in: 'is in 🏐',
-    out: "can't make it 😔",
-    remind_me: 'wants a reminder 🔔',
-  }
-  return map[status] ?? status
+function statusText(status: string, guests?: number) {
+  if (status === 'in') return guests && guests > 0 ? `is in (+${guests}) 🏐` : 'is in 🏐'
+  if (status === 'out') return "can't make it 😔"
+  if (status === 'remind_me') return 'wants a reminder 🔔'
+  return status
 }
 
 // Strip any timezone suffix (Z or ±HH:MM) so JS treats the timestamp as
