@@ -1348,3 +1348,98 @@ Briefly considered. For in-person events, the location is the timezone — "7pm,
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · fogleman/gg · OpenMoji*
 *Tools: Claude Code · Linear*
+
+---
+
+## Session 16 — May 27, 2026
+
+---
+
+### What We Built
+
+Shipped MAT-56 — the "Remind Me" email notification system. Attendees who aren't sure yet can leave their email and get a reminder 24 hours before the event.
+
+---
+
+### Issues Closed
+
+**MAT-56 — Phase 2: Remind Me notification system**
+
+---
+
+### How It Works
+
+**Database**
+
+```sql
+ALTER TABLE responses ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ;
+```
+
+`reminded_at` is set when an email is sent — prevents duplicates on every subsequent cron run.
+
+**Backend — `internal/reminders.go`**
+
+`SendReminders(db, resendKey)` queries:
+
+```sql
+SELECT responses + events
+WHERE status = 'remind_me'
+  AND reminded_at IS NULL
+  AND notify_via IS NOT NULL
+  AND event_date BETWEEN now() + 23h AND now() + 25h
+```
+
+For each match it calls the Resend API (`POST https://api.resend.com/emails`) with a plain HTML email: name, event title, date/time, location, and a link back to the RSVP page. On success it sets `reminded_at = now()`.
+
+**Scheduler — `/cron/remind` endpoint**
+
+The background goroutine approach failed because Fly.io's auto-stop kills the process when there's no traffic. Even with `min_machines_running = 1` in fly.toml, both machines stopped to 0.
+
+Fix: exposed a token-protected `GET /cron/remind?token=TOKEN` endpoint. An external cron service (cron-job.org, free) pings it every 30 minutes. The HTTP request itself triggers Fly.io's auto-start — machine wakes up, `SendReminders()` runs, machine sleeps again. No always-on cost, reliable scheduling. The background goroutine stays as a best-effort fallback when the machine happens to be alive.
+
+`CRON_TOKEN` stored as a Fly.io secret. Requests with wrong or missing token → 401.
+
+**Frontend — RSVPPage**
+
+- Tapping "Not sure yet — remind me closer to the date" reveals an email input with an amber **"Remind me →"** button immediately below it
+- Main submit button is hidden when `status === 'remind_me'` (the inline button handles it)
+- Button enables as soon as an email is typed — name is validated on submit with an explicit alert if missing
+- `notify_via` included in the RSVP POST payload; backend already required it for `remind_me` status
+
+**Email provider**
+
+Resend (`resend.com`) — plain HTTP call, no SDK. API key stored as `RESEND_API_KEY` Fly.io secret. Sending domain: `ollae.app` (verified in Resend dashboard). From address: `reminders@ollae.app`.
+
+---
+
+### Things That Tripped Us Up
+
+**`min_machines_running = 1` not respected**
+
+Set `min_machines_running = 1` in fly.toml expecting Fly.io to keep one machine alive for the goroutine scheduler. Both machines still stopped to 0. The background goroutine can't survive this — it dies with the process. The external cron + auto-start approach is the correct pattern for this class of problem: use the HTTP request as the heartbeat rather than relying on the machine staying alive.
+
+**Button disabled with no explanation**
+
+The "Remind me →" button used the same `canSubmit` condition as the main submit button, which requires both name AND email. A user who typed their email without first entering their name saw a permanently disabled button with no indication why. Fixed by giving the remind-me button its own `canRemindMe = !!notifyVia.trim()` condition — email alone enables it — and showing an alert on submit if name is missing.
+
+---
+
+### Product Decisions Made
+
+| Decision | Rationale |
+|---|---|
+| Email only (no SMS) | Resend is free up to 3k/month, zero infra. Twilio requires number provisioning and per-message cost. Email is sufficient for this use case. |
+| 24h window (23h–25h before event) | One reminder is enough. The 2-hour window gives a buffer for cron timing drift. |
+| External cron over always-on machine | Cheaper (no idle machine cost), more reliable (external service has its own uptime SLA), and the auto-start pattern handles the wakeup transparently. |
+| `reminded_at` column over separate table | Simple, queryable, idempotent. One column prevents duplicates without any additional join or state machine. |
+
+---
+
+### Not Built
+
+**Conversion tracking (remind me → in/out)** — the `remind_me` status is updated in place when a participant returns and resubmits. The existing upsert already handles this correctly. No separate tracking column needed for the current product stage.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
+*Tools: Claude Code · Linear · cron-job.org*
