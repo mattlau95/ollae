@@ -1261,3 +1261,90 @@ The admin token feature shows how much product surface you can cover without acc
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · fogleman/gg · OpenMoji*
 *Tools: Claude Code · Linear*
+
+---
+
+## Session 15 — May 27, 2026
+
+---
+
+### What We Built
+
+Shipped MAT-89 — RSVP guest/+1 support. Organizers can now see true headcount; attendees can RSVP for a group in one submission.
+
+---
+
+### Issues Closed
+
+**MAT-89 — RSVP +1 / bring guests support**
+
+---
+
+### How It Works
+
+**Database**
+
+```sql
+ALTER TABLE responses ADD COLUMN IF NOT EXISTS guests INTEGER NOT NULL DEFAULT 0;
+```
+
+Existing rows default to 0 — no behavioral change for any live events.
+
+**Backend — `internal/events.go`**
+
+- All `SELECT` queries for responses now include `guests`
+- `SubmitRSVP` accepts `guests` (0–99) in the request body and includes it in the upsert `ON CONFLICT DO UPDATE`
+- Validation: `guests < 0 || guests > 99` → 400. Cap raised from 5 to 99 to support custom input.
+- `guests` is forced to 0 when `status != "in"` — guests don't apply to "Can't make it" or "Remind me" RSVPs.
+
+**Frontend — RSVPPage**
+
+Guest picker appears below the "I'm in" / "Can't make it" buttons when `status === 'in'`. Four pills in a single row:
+
+```
+Just me · +1 · +2 · +3 · More
+```
+
+Tapping **More** expands to a compact number input (`+ ___ extra guests`) — auto-focused, accepts 1–99. Switching back to any pill hides the input and resets to that pill's value.
+
+Switching away from "I'm in" (to "Can't make it" or "Remind me") resets `guests` to 0 and hides the picker — handled in `handleSetStatus()`.
+
+Other surface changes:
+- **Attending count** — now sums total headcount: `responses.filter(r => r.status === 'in').reduce((sum, r) => sum + 1 + r.guests, 0)`. A single "I'm in (+3)" RSVP contributes 4 to the count.
+- **Activity feed** — entries read "is in (+3) 🏐" when `guests > 0`
+- **Submit button** — reads "We're in! →" when `status === 'in' && guests > 0`
+- **Success screen** — status line shows "Matt (+2) · I'm in 🏐"
+
+---
+
+### Things That Tripped Us Up
+
+**Fly Postgres machine was stopped**
+
+The `showup-db` machine had auto-stopped (Fly.io's scale-to-zero). `fly ssh console -a showup-db` failed with "no started VMs". Fix: `fly machine start <id>`, wait for "3 total, 3 passing" health checks, then run the migration.
+
+**Socket vs TCP postgres connection in SSH**
+
+`su postgres -c "psql -d showup_backend ..."` inside `fly ssh console` failed — the Postgres socket at `/var/run/postgresql/.s.PGSQL.5432` didn't exist even after the machine started. Root cause: the postgres process uses a different socket path inside the Fly machine. Worked around by using `fly pg connect -a showup-db -d showup_backend` with a heredoc — connects via Fly's built-in proxy without needing SSH access to the socket.
+
+---
+
+### Product Decisions Made
+
+| Decision | Rationale |
+|---|---|
+| 4 pills (Just me / +1 / +2 / +3) + More | Fits a single row on iPhone without wrapping. +4 and +5 pills required two rows. "More" covers edge cases without cluttering the common path. |
+| Guests cap raised to 99 | The "More" option is meaningless if the backend still rejects anything > 5. 99 is a reasonable ceiling for a social group event. |
+| Force `guests = 0` when status != "in" | "Can't make it, but bringing 3 people" makes no sense. Reset is silent — no UX needed. |
+| Attending count shows true headcount | The organizer asking "how many people are coming?" wants a number they can book a table or reserve spots for. RSVP count and headcount are different numbers. |
+
+---
+
+### Not Built: Timezone support
+
+Briefly considered. For in-person events, the location is the timezone — "7pm, Venice Beach Court 4" has no ambiguity. Timezone conversion is only meaningful for online/virtual events, which ollae doesn't model yet. Deferred indefinitely.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · fogleman/gg · OpenMoji*
+*Tools: Claude Code · Linear*
