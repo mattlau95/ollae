@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://ollae-backend.fly.dev'
@@ -19,9 +19,20 @@ export default function CreatePage() {
   const [submitting, setSubmitting] = useState(false)
   const [slug, setSlug] = useState<string | null>(null)
   const [adminToken, setAdminToken] = useState<string | null>(null)
+  const editBtnRef = useRef<HTMLButtonElement>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copiedAdmin, setCopiedAdmin] = useState(false)
+
+  // Scroll the action button into view when an event is first created,
+  // so the Edit button + both share cards are visible on mobile.
+  useEffect(() => {
+    if (slug && !isEditing) {
+      setTimeout(() => {
+        editBtnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 150)
+    }
+  }, [slug])
 
   const eventUrl = slug ? `${window.location.origin}/events/${slug}` : ''
   const displayUrl = slug ? `${window.location.hostname}/events/${slug}` : ''
@@ -253,6 +264,7 @@ export default function CreatePage() {
             )}
 
             <button
+              ref={editBtnRef}
               onClick={
                 isEditing ? handleUpdate :
                 slug ? () => setIsEditing(true) :

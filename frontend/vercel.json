@@ -7,6 +7,11 @@
     },
     {
       "source": "/events/:slug",
+      "has": [{ "type": "query", "key": "admin" }],
+      "destination": "/index.html"
+    },
+    {
+      "source": "/events/:slug",
       "destination": "https://ollae-backend.fly.dev/og-preview/:slug"
     },
     {
