@@ -31,6 +31,7 @@ type Response struct {
 	EventID   string    `json:"event_id"`
 	Name      string    `json:"name"`
 	Status    string    `json:"status"`
+	Guests    int       `json:"guests"`
 	NotifyVia *string   `json:"notify_via"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -146,7 +147,7 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.DB.Query(`
-		SELECT id, event_id, name, status, notify_via, created_at
+		SELECT id, event_id, name, status, guests, notify_via, created_at
 		FROM responses WHERE event_id = $1
 		ORDER BY created_at ASC
 	`, event.ID)
@@ -160,7 +161,7 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var resp Response
 		if err := rows.Scan(&resp.ID, &resp.EventID, &resp.Name,
-			&resp.Status, &resp.NotifyVia, &resp.CreatedAt); err != nil {
+			&resp.Status, &resp.Guests, &resp.NotifyVia, &resp.CreatedAt); err != nil {
 			http.Error(w, "failed to scan response", http.StatusInternalServerError)
 			return
 		}
@@ -226,6 +227,7 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name      string  `json:"name"`
 		Status    string  `json:"status"`
+		Guests    int     `json:"guests"`
 		NotifyVia *string `json:"notify_via"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -245,6 +247,14 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "notify_via is required when status is remind_me", http.StatusBadRequest)
 		return
 	}
+	if body.Guests < 0 || body.Guests > 99 {
+		http.Error(w, "guests must be between 0 and 99", http.StatusBadRequest)
+		return
+	}
+	// guests only makes sense for "in" RSVPs
+	if body.Status != "in" {
+		body.Guests = 0
+	}
 
 	// Look up the event by slug
 	var eventID string
@@ -260,11 +270,11 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 
 	// Upsert — insert or update if name already exists for this event
 	_, err = h.DB.Exec(`
-		INSERT INTO responses (event_id, name, status, notify_via)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO responses (event_id, name, status, guests, notify_via)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (event_id, lower(name))
-		DO UPDATE SET status = EXCLUDED.status, notify_via = EXCLUDED.notify_via
-	`, eventID, body.Name, body.Status, body.NotifyVia)
+		DO UPDATE SET status = EXCLUDED.status, guests = EXCLUDED.guests, notify_via = EXCLUDED.notify_via
+	`, eventID, body.Name, body.Status, body.Guests, body.NotifyVia)
 	if err != nil {
 		log.Printf("upsert error: %v", err)
 		http.Error(w, "failed to save response", http.StatusInternalServerError)
@@ -273,7 +283,7 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 
 	// Return the full updated response list
 	rows, err := h.DB.Query(`
-		SELECT id, event_id, name, status, notify_via, created_at
+		SELECT id, event_id, name, status, guests, notify_via, created_at
 		FROM responses WHERE event_id = $1
 		ORDER BY created_at ASC
 	`, eventID)
@@ -287,7 +297,7 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var resp Response
 		if err := rows.Scan(&resp.ID, &resp.EventID, &resp.Name,
-			&resp.Status, &resp.NotifyVia, &resp.CreatedAt); err != nil {
+			&resp.Status, &resp.Guests, &resp.NotifyVia, &resp.CreatedAt); err != nil {
 			http.Error(w, "failed to scan response", http.StatusInternalServerError)
 			return
 		}

@@ -37,12 +37,16 @@ export default function RSVPPage() {
   const [name, setName] = useState('')
   const [status, setStatus] = useState<RSVPStatus>(null)
   const [guests, setGuests] = useState(0)
+  const [showCustomGuests, setShowCustomGuests] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
   function handleSetStatus(s: RSVPStatus) {
     setStatus(s)
-    if (s !== 'in') setGuests(0)
+    if (s !== 'in') {
+      setGuests(0)
+      setShowCustomGuests(false)
+    }
   }
 
   // Edit state (admin only)
@@ -364,9 +368,9 @@ export default function RSVPPage() {
                   ].map(opt => (
                     <button
                       key={opt.value}
-                      onClick={() => setGuests(opt.value)}
+                      onClick={() => { setGuests(opt.value); setShowCustomGuests(false) }}
                       className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-                        guests === opt.value
+                        guests === opt.value && !showCustomGuests
                           ? 'bg-[#22C55E] border-[#16A34A] text-white'
                           : 'bg-bg-elevated border-white/[0.08] text-text-primary hover:border-white/25'
                       }`}
@@ -374,7 +378,35 @@ export default function RSVPPage() {
                       {opt.label}
                     </button>
                   ))}
+                  <button
+                    onClick={() => { setShowCustomGuests(true); if (guests <= 5) setGuests(6) }}
+                    className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                      showCustomGuests
+                        ? 'bg-[#22C55E] border-[#16A34A] text-white'
+                        : 'bg-bg-elevated border-white/[0.08] text-text-primary hover:border-white/25'
+                    }`}
+                  >
+                    More
+                  </button>
                 </div>
+                {showCustomGuests && (
+                  <div className="flex items-center gap-2 justify-center">
+                    <span className="text-sm text-text-muted">+</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="99"
+                      value={guests}
+                      onChange={e => {
+                        const n = parseInt(e.target.value, 10)
+                        if (!isNaN(n) && n >= 1) setGuests(n)
+                      }}
+                      autoFocus
+                      className="w-20 bg-bg-surface rounded-xl px-3 py-2 text-base text-text-primary border border-[#22C55E] focus:outline-none text-center [color-scheme:dark]"
+                    />
+                    <span className="text-sm text-text-muted">extra guests</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
