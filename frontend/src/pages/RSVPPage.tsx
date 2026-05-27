@@ -140,7 +140,8 @@ export default function RSVPPage() {
   }
 
   async function handleSubmit() {
-    if (!name.trim() || !status) return
+    if (!name.trim()) { alert('Please enter your name above first.'); return }
+    if (!status) return
     setSubmitting(true)
     try {
       const res = await fetch(`${API}/events/${slug}/rsvp`, {
@@ -182,6 +183,7 @@ export default function RSVPPage() {
   const sorted = [...responses].reverse()
   const visible = showAll ? sorted : sorted.slice(0, 8)
   const canSubmit = !!(name.trim() && status && (status !== 'remind_me' || notifyVia.trim()))
+  const canRemindMe = !!notifyVia.trim()
 
   return (
     <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6">
@@ -442,9 +444,9 @@ export default function RSVPPage() {
                 />
                 <button
                   onClick={handleSubmit}
-                  disabled={!canSubmit || submitting}
+                  disabled={!canRemindMe || submitting}
                   className={`w-full py-4 rounded-xl text-xl font-normal border transition-colors ${
-                    canSubmit
+                    canRemindMe
                       ? 'bg-[#F59E0B] text-[#F8FAFC] border-[#F8FAFC] hover:opacity-90'
                       : 'bg-bg-surface text-text-muted border-white/[0.08] cursor-not-allowed'
                   }`}
