@@ -41,10 +41,10 @@ func main() {
 	db := internal.NewDB(dbURL)
 
 	resendKey := os.Getenv("RESEND_API_KEY")
+	cronToken := os.Getenv("CRON_TOKEN")
 	h := &internal.EventHandlers{DB: db, AnthropicKey: os.Getenv("ANTHROPIC_API_KEY")}
 
-	// Start the background reminder loop — sends emails 24h before events
-	// to anyone who RSVPed with "Remind me". Runs every 30 minutes.
+	// Best-effort background loop (only fires while the machine is alive).
 	internal.StartReminderLoop(db, resendKey)
 
 	allowedOrigins := []string{"http://localhost:5173", "http://localhost:5174"}
@@ -79,6 +79,19 @@ func main() {
 
 	r.Get("/og/{slug}", h.OGImage)
 	r.Get("/og-preview/{slug}", h.OGPreview)
+
+	// Cron endpoint — called by an external cron service every 30 minutes.
+	// The request itself wakes the Fly.io machine (via auto-start), then
+	// SendReminders runs and the machine can go back to sleep.
+	r.Get("/cron/remind", func(w http.ResponseWriter, r *http.Request) {
+		if cronToken != "" && r.URL.Query().Get("token") != cronToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		internal.SendReminders(db, resendKey)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
+	})
 
 	log.Println("Server starting on :8080")
 	log.Fatal(http.ListenAndServe(":8080", r))

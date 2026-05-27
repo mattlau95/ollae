@@ -122,9 +122,10 @@ func sendReminderEmail(resendKey string, rem reminderRow) error {
 }
 
 // StartReminderLoop runs SendReminders every 30 minutes in the background.
+// Acts as a best-effort fallback when the machine stays alive; the primary
+// trigger is the /cron/remind HTTP endpoint pinged by an external cron service.
 func StartReminderLoop(db *sql.DB, resendKey string) {
 	go func() {
-		// Run once at startup (catches anything missed while the machine was stopped)
 		SendReminders(db, resendKey)
 		ticker := time.NewTicker(30 * time.Minute)
 		defer ticker.Stop()
