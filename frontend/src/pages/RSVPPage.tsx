@@ -38,6 +38,7 @@ export default function RSVPPage() {
   const [status, setStatus] = useState<RSVPStatus>(null)
   const [guests, setGuests] = useState(0)
   const [showCustomGuests, setShowCustomGuests] = useState(false)
+  const [notifyVia, setNotifyVia] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
 
@@ -46,6 +47,9 @@ export default function RSVPPage() {
     if (s !== 'in') {
       setGuests(0)
       setShowCustomGuests(false)
+    }
+    if (s !== 'remind_me') {
+      setNotifyVia('')
     }
   }
 
@@ -142,7 +146,12 @@ export default function RSVPPage() {
       const res = await fetch(`${API}/events/${slug}/rsvp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), status, guests }),
+        body: JSON.stringify({
+          name: name.trim(),
+          status,
+          guests,
+          ...(status === 'remind_me' && notifyVia.trim() ? { notify_via: notifyVia.trim() } : {}),
+        }),
       })
       if (!res.ok) throw new Error('Failed to submit')
       const updated: Response[] = await res.json()
@@ -172,7 +181,7 @@ export default function RSVPPage() {
   const attendingCount = responses.filter(r => r.status === 'in').reduce((sum, r) => sum + 1 + (r.guests || 0), 0)
   const sorted = [...responses].reverse()
   const visible = showAll ? sorted : sorted.slice(0, 8)
-  const canSubmit = !!(name.trim() && status)
+  const canSubmit = !!(name.trim() && status && (status !== 'remind_me' || notifyVia.trim()))
 
   return (
     <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6">
@@ -410,15 +419,27 @@ export default function RSVPPage() {
           </div>
 
           {/* Not sure yet */}
-          <div className="flex justify-center">
-            <button
-              onClick={() => handleSetStatus('remind_me')}
-              className={`text-base underline underline-offset-2 transition-opacity hover:opacity-70 ${
-                status === 'remind_me' ? 'text-status-remind' : 'text-text-primary'
-              }`}
-            >
-              Not sure yet — remind me closer to the date
-            </button>
+          <div className="flex flex-col gap-3">
+            <div className="flex justify-center">
+              <button
+                onClick={() => handleSetStatus('remind_me')}
+                className={`text-base underline underline-offset-2 transition-opacity hover:opacity-70 ${
+                  status === 'remind_me' ? 'text-status-remind' : 'text-text-primary'
+                }`}
+              >
+                Not sure yet — remind me closer to the date
+              </button>
+            </div>
+            {status === 'remind_me' && (
+              <input
+                type="email"
+                placeholder="Your email address"
+                value={notifyVia}
+                onChange={e => setNotifyVia(e.target.value)}
+                autoFocus
+                className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary placeholder-text-muted border border-status-remind/50 focus:outline-none focus:border-status-remind transition-colors"
+              />
+            )}
           </div>
 
           {/* Submit */}
