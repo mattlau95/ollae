@@ -268,6 +268,18 @@ func (h *EventHandlers) OGImage(w http.ResponseWriter, r *http.Request) {
 	png.Encode(w, dc.Image())
 }
 
+// isCrawlerUA returns true for known crawlers that execute JS and would follow
+// the location.replace redirect, losing the OG tags.
+func isCrawlerUA(ua string) bool {
+	return strings.Contains(ua, "facebookexternalhit") ||
+		strings.Contains(ua, "Facebot") ||
+		strings.Contains(ua, "Twitterbot") ||
+		strings.Contains(ua, "LinkedInBot") ||
+		strings.Contains(ua, "WhatsApp") ||
+		strings.Contains(ua, "Slackbot") ||
+		strings.Contains(ua, "TelegramBot")
+}
+
 func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
@@ -287,6 +299,11 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 	appURL := fmt.Sprintf("https://ollae.app/events/%s?_src=app", slug)
 	desc := "Tap to see who&#39;s coming &#8594;"
 
+	redirectScript := fmt.Sprintf(`<script>location.replace("%s")</script>`, appURL)
+	if isCrawlerUA(r.Header.Get("User-Agent")) {
+		redirectScript = ""
+	}
+
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
@@ -305,10 +322,10 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
   <meta name="twitter:title" content="%s" />
   <meta name="twitter:description" content="%s" />
   <meta name="twitter:image" content="%s" />
-  <script>location.replace("%s")</script>
+  %s
 </head>
 <body><a href="%s">Tap to see who's coming</a></body>
-</html>`, title, title, desc, ogImage, ogImage, ogURL, title, desc, ogImage, appURL, appURL)
+</html>`, title, title, desc, ogImage, ogImage, ogURL, title, desc, ogImage, redirectScript, appURL)
 
 	w.Header().Set("Content-Type", "text/html;charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
