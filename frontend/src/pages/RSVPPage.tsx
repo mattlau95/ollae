@@ -18,6 +18,7 @@ type Event = {
   location: string
   event_date: string | null
   created_at: string
+  emoji?: string
 }
 
 type RSVPStatus = 'in' | 'out' | 'remind_me' | null
@@ -177,7 +178,7 @@ export default function RSVPPage() {
     </div>
   )
 
-  if (submitted) return <SuccessScreen name={name} status={status!} guests={guests} onBack={() => setSubmitted(false)} />
+  if (submitted) return <SuccessScreen name={name} status={status!} guests={guests} eventEmoji={event?.emoji || '🎉'} onBack={() => setSubmitted(false)} />
 
   const attendingCount = responses.filter(r => r.status === 'in').reduce((sum, r) => sum + 1 + (r.guests || 0), 0)
   const sorted = [...responses].reverse()
@@ -290,7 +291,7 @@ export default function RSVPPage() {
                   {visible.map(r => (
                     <p key={r.id} className="text-base text-text-muted leading-[150%] pb-4">
                       <span className="text-text-primary font-medium">{r.name}</span>
-                      {' '}{statusText(r.status, r.guests)}{' · '}{timeAgo(r.created_at)}
+                      {' '}{statusText(r.status, r.guests, event?.emoji || '🎉')}{' · '}{timeAgo(r.created_at)}
                     </p>
                   ))}
                 </div>
@@ -478,11 +479,11 @@ export default function RSVPPage() {
   )
 }
 
-function SuccessScreen({ name, status, guests, onBack }: { name: string; status: RSVPStatus; guests: number; onBack: () => void }) {
+function SuccessScreen({ name, status, guests, eventEmoji, onBack }: { name: string; status: RSVPStatus; guests: number; eventEmoji: string; onBack: () => void }) {
   const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'
   const message = status === 'in' ? "You're on the list!" : status === 'out' ? "Got it, you're out." : "We'll remind you!"
   const guestSuffix = status === 'in' && guests > 0 ? ` (+${guests})` : ''
-  const statusLine = status === 'in' ? `${name}${guestSuffix} · I'm in 🏐` : status === 'out' ? `${name} · Can't make it 😔` : `${name} · Remind me 🔔`
+  const statusLine = status === 'in' ? `${name}${guestSuffix} · I'm in ${eventEmoji}` : status === 'out' ? `${name} · Can't make it 😔` : `${name} · Remind me 🔔`
   const statusColor = status === 'in' ? 'text-[#22C55E]' : status === 'out' ? 'text-[#EF4444]' : 'text-status-remind'
 
   return (
@@ -500,8 +501,8 @@ function SuccessScreen({ name, status, guests, onBack }: { name: string; status:
   )
 }
 
-function statusText(status: string, guests?: number) {
-  if (status === 'in') return guests && guests > 0 ? `is in (+${guests}) 🏐` : 'is in 🏐'
+function statusText(status: string, guests?: number, emoji = '🎉') {
+  if (status === 'in') return guests && guests > 0 ? `is in (+${guests}) ${emoji}` : `is in ${emoji}`
   if (status === 'out') return "can't make it 😔"
   if (status === 'remind_me') return 'wants a reminder 🔔'
   return status
