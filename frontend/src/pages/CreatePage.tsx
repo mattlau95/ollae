@@ -6,6 +6,14 @@ const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' :
 export default function CreatePage() {
   useEffect(() => { document.title = 'Create Event · ollae.app' }, [])
 
+  const [retentionMonths, setRetentionMonths] = useState<number | null>(null)
+  useEffect(() => {
+    fetch(`${API}/settings/retention`)
+      .then(r => r.json())
+      .then(d => setRetentionMonths(d.retention_months))
+      .catch(() => {})
+  }, [])
+
   const [view, setView] = useState<'nl' | 'form'>('nl')
   const [nlInput, setNlInput] = useState('')
   const [parsing, setParsing] = useState(false)
@@ -347,6 +355,11 @@ export default function CreatePage() {
                         </span>
                       </div>
                     </button>
+                    {retentionMonths !== null && (
+                      <p className="text-xs text-text-disabled text-center">
+                        This event and its data will be automatically deleted {retentionMonths} month{retentionMonths !== 1 ? 's' : ''} after it passes.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

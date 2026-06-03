@@ -39,6 +39,7 @@ type Response struct {
 type EventHandlers struct {
 	DB           *sql.DB
 	AnthropicKey string
+	AdminSecret  string
 }
 
 func pickEmoji(ctx context.Context, apiKey, title string) string {

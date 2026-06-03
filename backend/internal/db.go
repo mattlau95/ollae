@@ -19,3 +19,17 @@ func NewDB(connStr string) *sql.DB {
 	fmt.Println("Database connected")
 	return db
 }
+
+func RunMigrations(db *sql.DB) {
+	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS settings (
+			key   TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		);
+		INSERT INTO settings (key, value) VALUES ('retention_months', '2')
+		ON CONFLICT (key) DO NOTHING;
+	`)
+	if err != nil {
+		log.Printf("migration warning: %v", err)
+	}
+}

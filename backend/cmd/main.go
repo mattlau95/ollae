@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -39,10 +40,15 @@ func main() {
 		dbURL = "postgres://postgres:Q94BjBR!s*lsCn@localhost:5432/showup?sslmode=disable"
 	}
 	db := internal.NewDB(dbURL)
+	internal.RunMigrations(db)
 
 	resendKey := os.Getenv("RESEND_API_KEY")
 	cronToken := os.Getenv("CRON_TOKEN")
-	h := &internal.EventHandlers{DB: db, AnthropicKey: os.Getenv("ANTHROPIC_API_KEY")}
+	h := &internal.EventHandlers{
+		DB:           db,
+		AnthropicKey: os.Getenv("ANTHROPIC_API_KEY"),
+		AdminSecret:  os.Getenv("ADMIN_SECRET"),
+	}
 
 	// Best-effort background loop (only fires while the machine is alive).
 	internal.StartReminderLoop(db, resendKey)
@@ -61,8 +67,8 @@ func main() {
 	r.Use(headToGet)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: allowedOrigins,
-		AllowedMethods: []string{"GET", "HEAD", "POST", "PATCH", "OPTIONS"},
-		AllowedHeaders: []string{"Content-Type"},
+		AllowedMethods: []string{"GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Content-Type", "Authorization"},
 	}))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -80,9 +86,19 @@ func main() {
 	r.Get("/og/{slug}", h.OGImage)
 	r.Get("/og-preview/{slug}", h.OGPreview)
 
-	// Cron endpoint — called by an external cron service every 30 minutes.
-	// The request itself wakes the Fly.io machine (via auto-start), then
-	// SendReminders runs and the machine can go back to sleep.
+	r.Get("/settings/retention", h.GetRetention)
+
+	r.Route("/admin", func(r chi.Router) {
+		r.Get("/events", h.AdminGetEvents)
+		r.Patch("/events/{slug}", h.AdminUpdateEvent)
+		r.Delete("/events/{slug}", h.AdminDeleteEvent)
+		r.Delete("/responses/{id}", h.AdminDeleteResponse)
+		r.Patch("/settings", h.AdminUpdateSettings)
+	})
+
+	// Cron endpoints — called by an external cron service.
+	// The HTTP request wakes the Fly.io machine (auto-start), runs the job,
+	// then the machine can go back to sleep.
 	r.Get("/cron/remind", func(w http.ResponseWriter, r *http.Request) {
 		if cronToken != "" && r.URL.Query().Get("token") != cronToken {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -91,6 +107,16 @@ func main() {
 		internal.SendReminders(db, resendKey)
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	r.Get("/cron/cleanup", func(w http.ResponseWriter, r *http.Request) {
+		if cronToken != "" && r.URL.Query().Get("token") != cronToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		deleted := internal.RunCleanup(db)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int{"deleted": deleted})
 	})
 
 	log.Println("Server starting on :8080")
