@@ -1512,6 +1512,111 @@ For any page that needs to serve both a JS SPA and OG crawlers from the same URL
 
 ---
 
+## Session 19 — Jun 3, 2026
+
+---
+
+### What We Built
+
+Shipped MAT-73 — the platform admin dashboard, plus automatic event deletion with a configurable retention window and an organizer-facing deletion notice on the create page.
+
+---
+
+### Issues Closed
+
+**MAT-73 — Admin dashboard: platform-wide event and response management**
+
+---
+
+### How It Works
+
+**Authentication**
+
+The `/admin` page is a private tool for the platform owner. There's no login URL to guess — the page shows a password form. The entered secret is stored in `sessionStorage` (cleared when the tab closes) and sent as an `Authorization: Bearer <secret>` header on every API call. The secret never appears in the URL or browser history.
+
+Backend validates: `r.Header.Get("Authorization") == "Bearer "+secret`, where `secret = os.Getenv("ADMIN_SECRET")` (Fly.io secret).
+
+**Admin dashboard (`/admin`)**
+
+- Stats bar: total events, total RSVPs, active events (future-dated)
+- Each event row: emoji + title (click to edit inline), location, date, in/out/remind counts, expand/collapse, delete
+- Expanded: full response list — name, status, guest count, time ago, per-response delete
+- Deletes use `window.confirm()` before firing
+- Inline edit: title, location, datetime-local inputs, Save / Cancel
+
+**Retention setting**
+
+The header bar includes a number input (1–24 months) pre-filled from the DB. Saving calls `PATCH /admin/settings`, which upserts `retention_months` in a `settings` table. All reads fall back to `2` if the row is missing.
+
+**Event auto-deletion**
+
+`GET /cron/cleanup?token=TOKEN` — same pattern as `/cron/remind`. Reads `retention_months` from the settings table, then:
+
+```sql
+DELETE FROM events
+WHERE event_date IS NOT NULL
+  AND event_date < now() - ($1 || ' months')::INTERVAL
+```
+
+`ON DELETE CASCADE` handles responses. Returns `{ "deleted": N }`. Register on cron-job.org at a daily cadence — the HTTP request auto-wakes the Fly.io machine.
+
+**Settings table (migration)**
+
+`RunMigrations(db)` runs at startup (called from `main.go`) — idempotent, safe to redeploy:
+
+```sql
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+INSERT INTO settings (key, value) VALUES ('retention_months', '2') ON CONFLICT (key) DO NOTHING;
+```
+
+**Organizer notice on create page**
+
+`GET /settings/retention` (public, no auth) returns the current retention period. The create page fetches it on mount and shows a small note below the admin link:
+
+> *This event and its data will be automatically deleted 2 months after it passes.*
+
+Fails silently if the fetch errors — not critical to the create flow.
+
+---
+
+### API Surface
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/admin/events` | Bearer | All events + responses + stats |
+| `PATCH` | `/admin/events/:slug` | Bearer | Edit event details |
+| `DELETE` | `/admin/events/:slug` | Bearer | Delete event (cascades) |
+| `DELETE` | `/admin/responses/:id` | Bearer | Delete one response |
+| `PATCH` | `/admin/settings` | Bearer | Update retention_months |
+| `GET` | `/settings/retention` | None | Current retention (for create page) |
+| `GET` | `/cron/cleanup` | CRON_TOKEN | Delete expired events |
+
+---
+
+### Post-Deploy Steps
+
+1. `fly secrets set ADMIN_SECRET=<secret> -a ollae-backend`
+2. Register `GET https://ollae-backend.fly.dev/cron/cleanup?token=TOKEN` on cron-job.org — daily cadence
+
+---
+
+### Things That Tripped Us Up
+
+**Auth header CORS**
+
+Adding the `Authorization` header to API calls required adding it to the CORS `AllowedHeaders` list (`AllowedHeaders: []string{"Content-Type", "Authorization"}`). Without this, the browser's preflight OPTIONS request blocks the call before it reaches the handler — a silent 401 with no useful error message.
+
+**DELETE method CORS**
+
+Same story for `DELETE` — it needed to be added to `AllowedMethods`. Previously only `GET, HEAD, POST, PATCH, OPTIONS` were allowed.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
+*Tools: Claude Code · Linear*
+
+---
+
 ## Session 18 — Jun 3, 2026
 
 ---
