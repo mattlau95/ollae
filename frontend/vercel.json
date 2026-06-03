@@ -18,6 +18,7 @@
       "source": "/og/:slug",
       "destination": "https://ollae-backend.fly.dev/og/:slug"
     },
-    { "source": "/create", "destination": "/index.html" }
+    { "source": "/create", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" }
   ]
 }
