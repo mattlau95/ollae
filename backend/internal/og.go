@@ -277,7 +277,8 @@ func isCrawlerUA(ua string) bool {
 		strings.Contains(ua, "LinkedInBot") ||
 		strings.Contains(ua, "WhatsApp") ||
 		strings.Contains(ua, "Slackbot") ||
-		strings.Contains(ua, "TelegramBot")
+		strings.Contains(ua, "TelegramBot") ||
+		strings.Contains(ua, "MicroMessenger")
 }
 
 func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
@@ -308,6 +309,7 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>%s · ollae.app</title>
   <meta property="og:title" content="%s" />
   <meta property="og:description" content="%s" />
@@ -324,7 +326,9 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
   <meta name="twitter:image" content="%s" />
   %s
 </head>
-<body><a href="%s">Tap to see who's coming</a></body>
+<body style="margin:0;background:#0F172A;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:-apple-system,sans-serif;">
+  <a href="%s" style="color:#F59E0B;font-size:18px;font-weight:700;text-decoration:none;">Tap to see who's coming →</a>
+</body>
 </html>`, title, title, desc, ogImage, ogImage, ogURL, title, desc, ogImage, redirectScript, appURL)
 
 	w.Header().Set("Content-Type", "text/html;charset=utf-8")
