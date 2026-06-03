@@ -61,6 +61,8 @@ export default function AdminPage() {
   const [editSaving, setEditSaving] = useState(false)
   const [retentionInput, setRetentionInput] = useState('')
   const [retentionSaving, setRetentionSaving] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [batchDeleting, setBatchDeleting] = useState(false)
 
   useEffect(() => {
     if (key) fetchData(key)
@@ -189,6 +191,35 @@ export default function AdminPage() {
     })
   }
 
+  function toggleSelect(slug: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(slug) ? next.delete(slug) : next.add(slug)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelected(new Set(data?.events.map(e => e.slug) ?? []))
+  }
+
+  function deselectAll() {
+    setSelected(new Set())
+  }
+
+  async function deleteSelected() {
+    if (selected.size === 0) return
+    if (!window.confirm(`Delete ${selected.size} event${selected.size !== 1 ? 's' : ''} and all their responses?`)) return
+    setBatchDeleting(true)
+    const slugs = [...selected]
+    await Promise.all(slugs.map(slug =>
+      fetch(`${API}/admin/events/${slug}`, { method: 'DELETE', headers: authHeaders(key!) })
+    ))
+    setData(prev => prev ? { ...prev, events: prev.events.filter(e => !selected.has(e.slug)) } : null)
+    setSelected(new Set())
+    setBatchDeleting(false)
+  }
+
   if (!key) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
@@ -259,6 +290,37 @@ export default function AdminPage() {
 
       {/* Events */}
       <div className="flex flex-col gap-2">
+        {/* Batch action bar */}
+        {data.events.length > 0 && (
+          <div className="flex items-center gap-3 px-1 pb-1 text-sm">
+            <input
+              type="checkbox"
+              checked={selected.size === data.events.length && data.events.length > 0}
+              ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < data.events.length }}
+              onChange={e => e.target.checked ? selectAll() : deselectAll()}
+              className="accent-amber-500 cursor-pointer"
+              title="Select all"
+            />
+            {selected.size > 0 ? (
+              <>
+                <span className="text-gray-400">{selected.size} selected</span>
+                <button
+                  onClick={deleteSelected}
+                  disabled={batchDeleting}
+                  className="text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors font-medium"
+                >
+                  {batchDeleting ? 'Deleting…' : `Delete selected (${selected.size})`}
+                </button>
+                <button onClick={deselectAll} className="text-gray-600 hover:text-gray-400 transition-colors">
+                  Deselect all
+                </button>
+              </>
+            ) : (
+              <span className="text-gray-600">Select all</span>
+            )}
+          </div>
+        )}
+
         {data.events.length === 0 && (
           <p className="text-gray-500 text-sm">No events yet.</p>
         )}
@@ -266,6 +328,12 @@ export default function AdminPage() {
           <div key={ev.slug} className="bg-gray-800 rounded-lg overflow-hidden">
             {/* Event row */}
             <div className="flex items-center gap-3 px-4 py-3">
+              <input
+                type="checkbox"
+                checked={selected.has(ev.slug)}
+                onChange={() => toggleSelect(ev.slug)}
+                className="accent-amber-500 cursor-pointer shrink-0"
+              />
               <span className="text-xl shrink-0">{ev.emoji || '📅'}</span>
 
               <div className="flex-1 min-w-0">
