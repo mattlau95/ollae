@@ -1443,3 +1443,69 @@ The "Remind me →" button used the same `canSubmit` condition as the main submi
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
 *Tools: Claude Code · Linear · cron-job.org*
+
+---
+
+## Session 17 — Jun 1–3, 2026
+
+---
+
+### What We Fixed
+
+OG preview cards were broken in Facebook Messenger and WeChat — shared links showed a blank preview instead of the event title, date, and image.
+
+---
+
+### Root Cause
+
+The OG preview page at `/og/:slug` has always included a `<script>location.replace(appURL)</script>` to redirect real users from the server-rendered preview shell to the Vite SPA. The problem: Facebook's crawler (`facebookexternalhit`) and WeChat's scraper (`MicroMessenger`) both execute JavaScript. They hit `/og/:slug`, run the redirect script, land on `ollae.app/events/:slug?_src=app` — the bare Vite shell with no OG meta tags — and scrape nothing useful.
+
+Standard crawlers (Googlebot, etc.) don't execute JS, so this had never surfaced before.
+
+---
+
+### Fix
+
+Added `isCrawlerUA(ua string) bool` in `backend/internal/og.go`. If the incoming `User-Agent` matches a known JS-executing scraper, the redirect script is omitted entirely — the crawler reads the OG tags directly from the preview page.
+
+Crawler list: `facebookexternalhit`, `Facebot`, `Twitterbot`, `LinkedInBot`, `WhatsApp`, `Slackbot`, `TelegramBot`, `MicroMessenger`.
+
+```go
+func isCrawlerUA(ua string) bool {
+    return strings.Contains(ua, "facebookexternalhit") ||
+        strings.Contains(ua, "MicroMessenger") || // ... etc
+}
+
+redirectScript := fmt.Sprintf(`<script>location.replace("%s")</script>`, appURL)
+if isCrawlerUA(r.Header.Get("User-Agent")) {
+    redirectScript = ""
+}
+```
+
+WeChat was a follow-up catch two days later — same root cause, different UA string.
+
+Also improved the fallback `<body>` for users who somehow land on the preview page directly (e.g., WeChat in-app browser users who don't get the redirect): replaced a bare `<a>` with a styled dark-background tap-through link matching the app's design language.
+
+---
+
+### Things That Tripped Us Up
+
+**Facebook's crawler executes JS**
+This is documented but easy to forget: `facebookexternalhit` runs `<script>` tags. Any redirect-via-JS pattern on an OG preview page will break Facebook link previews. The correct pattern is either server-side redirect (detect crawler in the handler, `http.Redirect`) or, as done here, conditionally omit the script entirely.
+
+**WeChat uses `MicroMessenger` not `WeChat`**
+WeChat's UA string identifies as `MicroMessenger`. Searching for `"WeChat"` catches nothing.
+
+---
+
+### Pattern
+
+For any page that needs to serve both a JS SPA and OG crawlers from the same URL:
+- Server-render the OG meta tags
+- Use `User-Agent` detection to gate the JS redirect
+- Keep the UA list additive — crawlers are discovered by testing, not by documentation
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
+*Tools: Claude Code · Linear*
