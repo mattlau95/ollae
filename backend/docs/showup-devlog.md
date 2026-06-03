@@ -1664,3 +1664,58 @@ The Claude prompt is generic, not sports-only: "Team Lunch" gets a food emoji, "
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
 *Tools: Claude Code · Linear*
+
+---
+
+## Session 20 — Jun 3, 2026
+
+---
+
+### What We Built
+
+Two follow-ups to the Session 19 admin dashboard: fixed a Vercel routing gap that made `/admin` return 404, fixed a `fly.toml` misconfiguration, and shipped MAT-119 — batch delete for the admin dashboard.
+
+---
+
+### Issues Closed
+
+**MAT-119 — Admin dashboard: batch delete events**
+
+---
+
+### Fixes
+
+**`/admin` returning 404 on Vercel**
+
+The SPA rewrite rules in `vercel.json` only listed known routes explicitly (`/create`, `/events/:slug`). `/admin` wasn't in the list, so Vercel had no rule to serve `index.html` — it fell through to a 404. Fix: added `{ "source": "/admin", "destination": "/index.html" }`.
+
+**Takeaway:** every new top-level SPA route needs a corresponding rewrite in `vercel.json`. The dev server handles it automatically; production does not.
+
+**`fly deploy` failing — empty `[build]` section in `fly.toml`**
+
+The `[build]` section existed but was empty, so Fly couldn't find the Dockerfile. Fix: added `dockerfile = "Dockerfile"`. The Dockerfile was already correct — just not referenced.
+
+---
+
+### Batch Delete (MAT-119)
+
+Frontend-only change in `AdminPage.tsx`. No new backend endpoints needed — the existing `DELETE /admin/events/:slug` already cascades responses.
+
+**What was added:**
+- Checkbox on each event row
+- Indeterminate select-all checkbox above the list (dash when partially selected, checks all on click)
+- Batch action bar that appears when at least one event is checked: shows count, "Delete selected (N)", "Deselect all"
+- On confirm: fires all DELETEs in parallel via `Promise.all`, removes rows from UI, clears selection
+
+```tsx
+await Promise.all(slugs.map(slug =>
+  fetch(`${API}/admin/events/${slug}`, { method: 'DELETE', headers: authHeaders(key!) })
+))
+```
+
+Parallel deletes are safe here — each is an independent operation with no ordering dependency.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
+*Tools: Claude Code · Linear*
