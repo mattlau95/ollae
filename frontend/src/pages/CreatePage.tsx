@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import confetti from 'canvas-confetti'
 
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://ollae-backend.fly.dev'
 
@@ -116,6 +117,7 @@ export default function CreatePage() {
       const event = await res.json()
       setSlug(event.slug)
       setAdminToken(event.admin_token ?? null)
+      confetti({ particleCount: 80, spread: 55, origin: { y: 0.5 }, ticks: 180 })
     } catch {
       alert('Something went wrong. Try again.')
     } finally {

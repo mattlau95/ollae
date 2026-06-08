@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
+import confetti from 'canvas-confetti'
 
 const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://ollae-backend.fly.dev'
 
@@ -480,6 +481,27 @@ export default function RSVPPage() {
 }
 
 function SuccessScreen({ name, status, guests, eventEmoji, onBack }: { name: string; status: RSVPStatus; guests: number; eventEmoji: string; onBack: () => void }) {
+  useEffect(() => {
+    if (status !== 'in') return
+    const shape = confetti.shapeFromText({ text: eventEmoji, scalar: 2 })
+    const fire = (opts: confetti.Options) =>
+      confetti({ shapes: [shape], scalar: 2, ticks: 120, gravity: 0.8, ...opts })
+
+    fire({ particleCount: 25, spread: 70, origin: { x: 0.2, y: 0.1 } })
+    fire({ particleCount: 25, spread: 70, origin: { x: 0.8, y: 0.1 } })
+    const t1 = setTimeout(() => {
+      fire({ particleCount: 20, spread: 60, origin: { x: 0.5, y: 0.05 } })
+    }, 350)
+    const t2 = setTimeout(() => {
+      fire({ particleCount: 20, spread: 80, origin: { x: 0.25, y: 0.1 } })
+      fire({ particleCount: 20, spread: 80, origin: { x: 0.75, y: 0.1 } })
+    }, 750)
+    const t3 = setTimeout(() => {
+      fire({ particleCount: 15, spread: 60, origin: { x: 0.5, y: 0.05 } })
+    }, 1200)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+  }, [])
+
   const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'
   const message = status === 'in' ? "You're on the list!" : status === 'out' ? "Got it, you're out." : "We'll remind you!"
   const guestSuffix = status === 'in' && guests > 0 ? ` (+${guests})` : ''
