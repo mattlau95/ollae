@@ -1719,3 +1719,68 @@ Parallel deletes are safe here — each is an independent operation with no orde
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
 *Tools: Claude Code · Linear*
+
+---
+
+## Session 21 — Jun 8, 2026
+
+---
+
+### What We Built
+
+Shipped MAT-142 — celebration animations on the two highest-emotion moments in the product: event creation and "I'm in" RSVP.
+
+---
+
+### Issues Closed
+
+**MAT-142 — Celebration animations on event creation and "I'm in" RSVP**
+
+---
+
+### What Changed
+
+Both animations use `canvas-confetti` (4 KB gzipped, zero dependencies). One new package, two call sites.
+
+**Event creation (`CreatePage.tsx`)**
+
+Fires immediately after `setSlug()` — the moment the share cards appear:
+
+```ts
+confetti({ particleCount: 80, spread: 55, origin: { y: 0.5 }, ticks: 180 })
+```
+
+Single burst, restrained. The organizer's emotion is satisfaction — not hype.
+
+**"I'm in" RSVP (`RSVPPage.tsx` — `SuccessScreen`)**
+
+Fires on mount of `SuccessScreen`, gated to `status === 'in'`:
+
+```ts
+confetti({ particleCount: 80, spread: 55, origin: { y: 0.5 }, ticks: 180 })
+```
+
+Same call as event creation — consistent feel across both moments. "Can't make it" and "Remind me" paths are untouched.
+
+---
+
+### Product Decisions Made
+
+| Decision | Rationale |
+|---|---|
+| `canvas-confetti` over `framer-motion` | 4 KB vs ~40 KB. Framer-motion makes sense if page transitions or modal animations are added — not worth it for two bursts. |
+| Same animation for both moments | Explored Partiful-style emoji rain for RSVP (sustained, full-screen, event emoji as particles) and a Nike-style premium burst for creation. Iterated through a few approaches before landing on matching both to the same call — cleaner and more coherent. |
+| No animation for "Can't make it" / "Remind me" | Only "I'm in" warrants celebration. Confetti on a rejection would be tone-deaf. |
+
+---
+
+### Things That Tripped Us Up
+
+**Emoji rain was underwhelming in practice**
+
+First implementation used `confetti.shapeFromText()` to rain the event's own emoji down from the top. Looked great in theory — Partiful does something similar. In practice the particles were small and clustered near the top of the screen. Iterated on scalar, gravity, ticks, and origin spread across multiple deploys before deciding the simpler standard confetti matched the product's tone better.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend · canvas-confetti*
+*Tools: Claude Code · Linear*
