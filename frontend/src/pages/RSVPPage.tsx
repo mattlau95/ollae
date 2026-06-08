@@ -483,23 +483,28 @@ export default function RSVPPage() {
 function SuccessScreen({ name, status, guests, eventEmoji, onBack }: { name: string; status: RSVPStatus; guests: number; eventEmoji: string; onBack: () => void }) {
   useEffect(() => {
     if (status !== 'in') return
-    const shape = confetti.shapeFromText({ text: eventEmoji, scalar: 2 })
-    const fire = (opts: confetti.Options) =>
-      confetti({ shapes: [shape], scalar: 2, ticks: 120, gravity: 0.8, ...opts })
+    const shape = confetti.shapeFromText({ text: eventEmoji, scalar: 4 })
+    const rain = (xs: number[]) => xs.forEach(x =>
+      confetti({
+        shapes: [shape],
+        scalar: 4,
+        particleCount: 4,
+        angle: 270,
+        spread: 20,
+        startVelocity: 28,
+        ticks: 600,
+        gravity: 0.3,
+        drift: 0,
+        origin: { x, y: -0.05 },
+      })
+    )
 
-    fire({ particleCount: 25, spread: 70, origin: { x: 0.2, y: 0.1 } })
-    fire({ particleCount: 25, spread: 70, origin: { x: 0.8, y: 0.1 } })
-    const t1 = setTimeout(() => {
-      fire({ particleCount: 20, spread: 60, origin: { x: 0.5, y: 0.05 } })
-    }, 350)
-    const t2 = setTimeout(() => {
-      fire({ particleCount: 20, spread: 80, origin: { x: 0.25, y: 0.1 } })
-      fire({ particleCount: 20, spread: 80, origin: { x: 0.75, y: 0.1 } })
-    }, 750)
-    const t3 = setTimeout(() => {
-      fire({ particleCount: 15, spread: 60, origin: { x: 0.5, y: 0.05 } })
-    }, 1200)
-    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3) }
+    rain([0.1, 0.25, 0.4, 0.55, 0.7, 0.85])
+    const t1 = setTimeout(() => rain([0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95]), 300)
+    const t2 = setTimeout(() => rain([0.12, 0.3, 0.45, 0.6, 0.75, 0.9]), 650)
+    const t3 = setTimeout(() => rain([0.08, 0.22, 0.42, 0.58, 0.72, 0.88]), 1050)
+    const t4 = setTimeout(() => rain([0.15, 0.32, 0.5, 0.68, 0.82]), 1500)
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4) }
   }, [])
 
   const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'
