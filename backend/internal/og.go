@@ -273,6 +273,8 @@ func (h *EventHandlers) OGImage(w http.ResponseWriter, r *http.Request) {
 func isCrawlerUA(ua string) bool {
 	return strings.Contains(ua, "facebookexternalhit") ||
 		strings.Contains(ua, "Facebot") ||
+		strings.Contains(ua, "FacebookBot") || // Messenger preview renderer (Chromium-based, executes JS)
+		strings.Contains(ua, "meta-externalagent") || // Meta's newer scraper family
 		strings.Contains(ua, "Twitterbot") ||
 		strings.Contains(ua, "LinkedInBot") ||
 		strings.Contains(ua, "WhatsApp") ||
@@ -332,7 +334,7 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 </html>`, title, title, desc, ogImage, ogImage, ogURL, title, desc, ogImage, redirectScript, appURL)
 
 	w.Header().Set("Content-Type", "text/html;charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("Cache-Control", "public, max-age=300, s-maxage=86400")
 	w.Write([]byte(html))
 }
 
