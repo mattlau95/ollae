@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -40,6 +41,7 @@ type EventHandlers struct {
 	DB           *sql.DB
 	AnthropicKey string
 	AdminSecret  string
+	FBAppToken   string
 }
 
 func pickEmoji(ctx context.Context, apiKey, title string) string {
@@ -122,9 +124,58 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pre-warm the OG image so the CDN has it cached before Facebook's scraper
+	// hits the URL — FB's first scrape wins and is cached for ~30 days.
+	warmCtx, warmCancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer warmCancel()
+	if warmReq, err := http.NewRequestWithContext(warmCtx, http.MethodGet, "https://ollae.app/og/"+slug, nil); err == nil {
+		if warmResp, err := http.DefaultClient.Do(warmReq); err == nil {
+			warmResp.Body.Close()
+		} else {
+			log.Printf("OG warm failed %s: %v", slug, err)
+		}
+	}
+
+	go h.pingFBScraper(slug)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(event)
+}
+
+// pingFBScraper tells Facebook to re-scrape the event URL. Messenger group chats
+// maintain a per-conversation preview cache that won't update from the CDN cache
+// alone — this forces Facebook to refresh their graph cache for the URL.
+func (h *EventHandlers) pingFBScraper(slug string) {
+	params := url.Values{
+		"id":     {"https://ollae.app/events/" + slug},
+		"scrape": {"true"},
+	}
+	if h.FBAppToken != "" {
+		params.Set("access_token", h.FBAppToken)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		"https://graph.facebook.com/?"+params.Encode(), nil)
+	if err != nil {
+		return
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Printf("FB scrape ping failed %s: %v", slug, err)
+		return
+	}
+	resp.Body.Close()
+}
+
+// RescrapeEvent lets an admin manually re-trigger the FB scraper ping for an
+// existing event — useful when a group chat has a stale cached preview.
+func (h *EventHandlers) RescrapeEvent(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	go h.pingFBScraper(slug)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
