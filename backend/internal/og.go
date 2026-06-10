@@ -264,7 +264,7 @@ func (h *EventHandlers) OGImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800")
+	w.Header().Set("Cache-Control", "public, max-age=31536000, s-maxage=31536000, immutable")
 	png.Encode(w, dc.Image())
 }
 
