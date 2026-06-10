@@ -20,5 +20,11 @@
     },
     { "source": "/create", "destination": "/index.html" },
     { "source": "/admin", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/events/:slug",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    }
   ]
 }
