@@ -63,6 +63,8 @@ export default function AdminPage() {
   const [retentionSaving, setRetentionSaving] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
+  const [rescraping, setRescraping] = useState(false)
+  const [rescrapeStatus, setRescrapeStatus] = useState<string | null>(null)
 
   useEffect(() => {
     if (key) fetchData(key)
@@ -207,6 +209,22 @@ export default function AdminPage() {
     setSelected(new Set())
   }
 
+  async function rescrapeSelected() {
+    if (selected.size === 0) return
+    setRescraping(true)
+    setRescrapeStatus(null)
+    const slugs = [...selected]
+    let done = 0
+    await Promise.all(slugs.map(async slug => {
+      await fetch(`${API}/events/${slug}/rescrape`, { method: 'POST' })
+      done++
+      setRescrapeStatus(`${done}/${slugs.length}`)
+    }))
+    setRescrapeStatus('Done ✓')
+    setRescraping(false)
+    setTimeout(() => setRescrapeStatus(null), 4000)
+  }
+
   async function deleteSelected() {
     if (selected.size === 0) return
     if (!window.confirm(`Delete ${selected.size} event${selected.size !== 1 ? 's' : ''} and all their responses?`)) return
@@ -305,8 +323,18 @@ export default function AdminPage() {
               <>
                 <span className="text-gray-400">{selected.size} selected</span>
                 <button
+                  onClick={rescrapeSelected}
+                  disabled={rescraping || batchDeleting}
+                  className="text-amber-400 hover:text-amber-300 disabled:opacity-50 transition-colors font-medium"
+                >
+                  {rescraping ? `Rescraping… ${rescrapeStatus ?? ''}` : `Rescrape FB (${selected.size})`}
+                </button>
+                {!rescraping && rescrapeStatus && (
+                  <span className="text-green-400 text-xs">{rescrapeStatus}</span>
+                )}
+                <button
                   onClick={deleteSelected}
-                  disabled={batchDeleting}
+                  disabled={batchDeleting || rescraping}
                   className="text-red-400 hover:text-red-300 disabled:opacity-50 transition-colors font-medium"
                 >
                   {batchDeleting ? 'Deleting…' : `Delete selected (${selected.size})`}
