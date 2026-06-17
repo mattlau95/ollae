@@ -264,7 +264,7 @@ func (h *EventHandlers) OGImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "public, max-age=86400, s-maxage=86400")
+	w.Header().Set("Cache-Control", "public, max-age=86400, s-maxage=86400, no-transform")
 	png.Encode(w, dc.Image())
 }
 
@@ -335,7 +335,7 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 </html>`, title, title, desc, ogImage, ogImage, ogURL, title, desc, ogImage, redirectScript, appURL)
 
 	w.Header().Set("Content-Type", "text/html;charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Cache-Control", "no-store, no-transform")
 	w.Write([]byte(html))
 }
 

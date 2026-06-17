@@ -25,7 +25,7 @@
   "headers": [
     {
       "source": "/events/:slug",
-      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+      "headers": [{ "key": "Cache-Control", "value": "no-store, no-transform" }]
     }
   ]
 }
