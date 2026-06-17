@@ -297,7 +297,7 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	title := escapeHTML(event.Title)
-	ogImage := fmt.Sprintf("https://ollae.app/og/%s", slug)
+	ogImage := fmt.Sprintf("https://ollae.app/og/%s?v=2", slug)
 	ogURL := fmt.Sprintf("https://ollae.app/events/%s", slug)
 	appURL := fmt.Sprintf("https://ollae.app/events/%s?_src=app", slug)
 	desc := "Tap to see who&#39;s coming &#8594;"
