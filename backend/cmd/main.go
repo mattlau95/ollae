@@ -48,6 +48,7 @@ func main() {
 		DB:           db,
 		AnthropicKey: os.Getenv("ANTHROPIC_API_KEY"),
 		AdminSecret:  os.Getenv("ADMIN_SECRET"),
+		FBAppToken:   os.Getenv("FB_APP_TOKEN"),
 	}
 
 	// Best-effort background loop (only fires while the machine is alive).
@@ -85,6 +86,7 @@ func main() {
 
 	r.Get("/og/{slug}", h.OGImage)
 	r.Get("/og-preview/{slug}", h.OGPreview)
+	r.Post("/events/{slug}/rescrape", h.RescrapeEvent)
 
 	r.Get("/settings/retention", h.GetRetention)
 
