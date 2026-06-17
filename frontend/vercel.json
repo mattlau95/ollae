@@ -3,6 +3,7 @@
     {
       "source": "/events/:slug",
       "has": [{ "type": "query", "key": "_src", "value": "app" }],
+      "missing": [{ "type": "header", "key": "user-agent", "value": "facebookexternalhit|Facebot|FacebookBot|meta-externalagent|Twitterbot|LinkedInBot|WhatsApp|Slackbot|TelegramBot|MicroMessenger" }],
       "destination": "/index.html"
     },
     {

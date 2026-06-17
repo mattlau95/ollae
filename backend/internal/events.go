@@ -147,12 +147,14 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 // maintain a per-conversation preview cache that won't update from the CDN cache
 // alone — this forces Facebook to refresh their graph cache for the URL.
 func (h *EventHandlers) pingFBScraper(slug string) {
-	params := url.Values{
-		"id":     {"https://ollae.app/events/" + slug},
-		"scrape": {"true"},
+	if h.FBAppToken == "" {
+		log.Printf("FB scrape ping skipped %s: FB_APP_TOKEN not set", slug)
+		return
 	}
-	if h.FBAppToken != "" {
-		params.Set("access_token", h.FBAppToken)
+	params := url.Values{
+		"id":           {"https://ollae.app/events/" + slug},
+		"scrape":       {"true"},
+		"access_token": {h.FBAppToken},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -166,7 +168,13 @@ func (h *EventHandlers) pingFBScraper(slug string) {
 		log.Printf("FB scrape ping failed %s: %v", slug, err)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("FB scrape ping error %s: status=%d body=%s", slug, resp.StatusCode, body)
+	} else {
+		log.Printf("FB scrape ping ok %s: %s", slug, body)
+	}
 }
 
 // RescrapeEvent lets an admin manually re-trigger the FB scraper ping for an
@@ -268,6 +276,8 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to update event", http.StatusInternalServerError)
 		return
 	}
+
+	go h.pingFBScraper(slug)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(event)

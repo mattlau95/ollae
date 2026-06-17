@@ -264,7 +264,7 @@ func (h *EventHandlers) OGImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "public, max-age=31536000, s-maxage=31536000, immutable")
+	w.Header().Set("Cache-Control", "public, max-age=86400, s-maxage=86400")
 	png.Encode(w, dc.Image())
 }
 
@@ -322,6 +322,7 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
   <meta property="og:image:height" content="630" />
   <meta property="og:url" content="%s" />
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ollae" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="%s" />
   <meta name="twitter:description" content="%s" />
