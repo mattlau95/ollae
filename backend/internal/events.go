@@ -128,7 +128,7 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	// hits the URL — FB's first scrape wins and is cached for ~30 days.
 	warmCtx, warmCancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer warmCancel()
-	if warmReq, err := http.NewRequestWithContext(warmCtx, http.MethodGet, "https://ollae.app/og/"+slug, nil); err == nil {
+	if warmReq, err := http.NewRequestWithContext(warmCtx, http.MethodGet, "https://ollae.app/og/"+slug+"?v=2", nil); err == nil {
 		if warmResp, err := http.DefaultClient.Do(warmReq); err == nil {
 			warmResp.Body.Close()
 		} else {

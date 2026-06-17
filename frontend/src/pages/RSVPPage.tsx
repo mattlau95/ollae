@@ -30,6 +30,14 @@ export default function RSVPPage() {
   const adminToken = searchParams.get('admin')
   const isAdmin = !!adminToken
 
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (url.searchParams.has('_src')) {
+      url.searchParams.delete('_src')
+      window.history.replaceState({}, '', url.toString())
+    }
+  }, [])
+
   const [event, setEvent] = useState<Event | null>(null)
   const [responses, setResponses] = useState<Response[]>([])
   const [loading, setLoading] = useState(true)
