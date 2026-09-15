@@ -10,7 +10,7 @@
   --color-text-primary: #F8FAFC;
   --color-text-secondary: #94A3B8;
   --color-text-muted: #94A3B8;
-  --color-text-disabled: #64748B;
+  --color-text-disabled: #94A3B8; /* 7:1 on bg-base; #64748B was 3.8:1, below AA */
 
   /* Borders */
   --color-border: #334155;
