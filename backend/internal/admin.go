@@ -48,7 +48,7 @@ func getRetentionMonths(db *sql.DB) int {
 
 func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 	if !adminAuth(h.AdminSecret, r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -59,7 +59,7 @@ func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 		       COUNT(*) FILTER (WHERE event_date > now())
 		FROM events
 	`).Scan(&totalEvents, &totalRSVPs, &activeEvents); err != nil {
-		http.Error(w, "failed to fetch stats", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to fetch stats")
 		return
 	}
 
@@ -76,7 +76,7 @@ func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 		ORDER BY e.created_at DESC
 	`)
 	if err != nil {
-		http.Error(w, "failed to fetch events", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to fetch events")
 		return
 	}
 	defer rows.Close()
@@ -88,7 +88,7 @@ func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 			&ev.ID, &ev.Slug, &ev.Title, &ev.Location, &ev.EventDate, &ev.CreatedAt, &ev.Emoji,
 			&ev.Counts.In, &ev.Counts.Out, &ev.Counts.RemindMe,
 		); err != nil {
-			http.Error(w, "failed to scan event", http.StatusInternalServerError)
+			JSONError(w, http.StatusInternalServerError, "failed to scan event")
 			return
 		}
 
@@ -97,7 +97,7 @@ func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 			FROM responses WHERE event_id = $1 ORDER BY created_at ASC
 		`, ev.ID)
 		if err != nil {
-			http.Error(w, "failed to fetch responses", http.StatusInternalServerError)
+			JSONError(w, http.StatusInternalServerError, "failed to fetch responses")
 			return
 		}
 		ev.Responses = []Response{}
@@ -105,7 +105,7 @@ func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 			var resp Response
 			if err := respRows.Scan(&resp.ID, &resp.EventID, &resp.Name, &resp.Status, &resp.Guests, &resp.NotifyVia, &resp.CreatedAt); err != nil {
 				respRows.Close()
-				http.Error(w, "failed to scan response", http.StatusInternalServerError)
+				JSONError(w, http.StatusInternalServerError, "failed to scan response")
 				return
 			}
 			ev.Responses = append(ev.Responses, resp)
@@ -129,12 +129,12 @@ func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 
 func (h *EventHandlers) AdminDeleteEvent(w http.ResponseWriter, r *http.Request) {
 	if !adminAuth(h.AdminSecret, r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	slug := chi.URLParam(r, "slug")
 	if _, err := h.DB.Exec(`DELETE FROM events WHERE slug = $1`, slug); err != nil {
-		http.Error(w, "failed to delete event", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to delete event")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -142,12 +142,12 @@ func (h *EventHandlers) AdminDeleteEvent(w http.ResponseWriter, r *http.Request)
 
 func (h *EventHandlers) AdminDeleteResponse(w http.ResponseWriter, r *http.Request) {
 	if !adminAuth(h.AdminSecret, r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	id := chi.URLParam(r, "id")
 	if _, err := h.DB.Exec(`DELETE FROM responses WHERE id = $1`, id); err != nil {
-		http.Error(w, "failed to delete response", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to delete response")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -155,7 +155,7 @@ func (h *EventHandlers) AdminDeleteResponse(w http.ResponseWriter, r *http.Reque
 
 func (h *EventHandlers) AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	if !adminAuth(h.AdminSecret, r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	slug := chi.URLParam(r, "slug")
@@ -166,11 +166,11 @@ func (h *EventHandlers) AdminUpdateEvent(w http.ResponseWriter, r *http.Request)
 		EventDate *string `json:"event_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if body.Title == "" {
-		http.Error(w, "title is required", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "title is required")
 		return
 	}
 
@@ -184,11 +184,11 @@ func (h *EventHandlers) AdminUpdateEvent(w http.ResponseWriter, r *http.Request)
 		&event.EventDate, &event.CreatedAt, &event.Emoji,
 	)
 	if err == sql.ErrNoRows {
-		http.Error(w, "event not found", http.StatusNotFound)
+		JSONError(w, http.StatusNotFound, "event not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, "failed to update event", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to update event")
 		return
 	}
 
@@ -198,7 +198,7 @@ func (h *EventHandlers) AdminUpdateEvent(w http.ResponseWriter, r *http.Request)
 
 func (h *EventHandlers) AdminUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if !adminAuth(h.AdminSecret, r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -206,11 +206,11 @@ func (h *EventHandlers) AdminUpdateSettings(w http.ResponseWriter, r *http.Reque
 		RetentionMonths int `json:"retention_months"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if body.RetentionMonths < 1 || body.RetentionMonths > 24 {
-		http.Error(w, "retention_months must be 1–24", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "retention_months must be 1–24")
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *EventHandlers) AdminUpdateSettings(w http.ResponseWriter, r *http.Reque
 		ON CONFLICT (key) DO UPDATE SET value = $1
 	`, strconv.Itoa(body.RetentionMonths))
 	if err != nil {
-		http.Error(w, "failed to update settings", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to update settings")
 		return
 	}
 

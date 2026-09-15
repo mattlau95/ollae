@@ -106,7 +106,7 @@ func main() {
 	// then the machine can go back to sleep.
 	r.Get("/cron/remind", func(w http.ResponseWriter, r *http.Request) {
 		if cronToken != "" && r.URL.Query().Get("token") != cronToken {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			internal.JSONError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		internal.SendReminders(db, resendKey)
@@ -116,7 +116,7 @@ func main() {
 
 	r.Get("/cron/cleanup", func(w http.ResponseWriter, r *http.Request) {
 		if cronToken != "" && r.URL.Query().Get("token") != cronToken {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			internal.JSONError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 		deleted := internal.RunCleanup(db)

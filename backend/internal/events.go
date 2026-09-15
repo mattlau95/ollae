@@ -86,11 +86,11 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		Emoji     string  `json:"emoji"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if body.Title == "" {
-		http.Error(w, "title is required", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "title is required")
 		return
 	}
 
@@ -101,12 +101,12 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	slug, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz0123456789", 8)
 	if err != nil {
-		http.Error(w, "failed to generate slug", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to generate slug")
 		return
 	}
 	adminToken, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 24)
 	if err != nil {
-		http.Error(w, "failed to generate token", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to generate token")
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		&event.EventDate, &event.CreatedAt, &event.Emoji, &event.AdminToken,
 	)
 	if err != nil {
-		http.Error(w, "failed to create event", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to create event")
 		return
 	}
 
@@ -181,7 +181,7 @@ func (h *EventHandlers) pingFBScraper(slug string) {
 // existing event — useful when a group chat has a stale cached preview.
 func (h *EventHandlers) RescrapeEvent(w http.ResponseWriter, r *http.Request) {
 	if !adminAuth(h.AdminSecret, r) {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	slug := chi.URLParam(r, "slug")
@@ -202,11 +202,11 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 		&event.EventDate, &event.CreatedAt, &event.Emoji,
 	)
 	if err == sql.ErrNoRows {
-		http.Error(w, "event not found", http.StatusNotFound)
+		JSONError(w, http.StatusNotFound, "event not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, "failed to fetch event", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to fetch event")
 		return
 	}
 
@@ -216,7 +216,7 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 		ORDER BY created_at ASC
 	`, event.ID)
 	if err != nil {
-		http.Error(w, "failed to fetch responses", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to fetch responses")
 		return
 	}
 	defer rows.Close()
@@ -226,7 +226,7 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 		var resp Response
 		if err := rows.Scan(&resp.ID, &resp.EventID, &resp.Name,
 			&resp.Status, &resp.Guests, &resp.NotifyVia, &resp.CreatedAt); err != nil {
-			http.Error(w, "failed to scan response", http.StatusInternalServerError)
+			JSONError(w, http.StatusInternalServerError, "failed to scan response")
 			return
 		}
 		responses = append(responses, resp)
@@ -244,7 +244,7 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 
 	adminToken := r.URL.Query().Get("admin")
 	if adminToken == "" {
-		http.Error(w, "admin token required", http.StatusUnauthorized)
+		JSONError(w, http.StatusUnauthorized, "admin token required")
 		return
 	}
 
@@ -254,11 +254,11 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		EventDate *string `json:"event_date"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if body.Title == "" {
-		http.Error(w, "title is required", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "title is required")
 		return
 	}
 
@@ -273,11 +273,11 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		&event.EventDate, &event.CreatedAt, &event.Emoji,
 	)
 	if err == sql.ErrNoRows {
-		http.Error(w, "event not found or invalid token", http.StatusForbidden)
+		JSONError(w, http.StatusForbidden, "event not found or invalid token")
 		return
 	}
 	if err != nil {
-		http.Error(w, "failed to update event", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to update event")
 		return
 	}
 
@@ -297,24 +297,24 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		NotifyVia *string `json:"notify_via"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, "invalid request body", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if body.Name == "" {
-		http.Error(w, "name is required", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "name is required")
 		return
 	}
 	validStatuses := map[string]bool{"in": true, "out": true, "remind_me": true}
 	if !validStatuses[body.Status] {
-		http.Error(w, "status must be in, out, or remind_me", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "status must be in, out, or remind_me")
 		return
 	}
 	if body.Status == "remind_me" && (body.NotifyVia == nil || *body.NotifyVia == "") {
-		http.Error(w, "notify_via is required when status is remind_me", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "notify_via is required when status is remind_me")
 		return
 	}
 	if body.Guests < 0 || body.Guests > 99 {
-		http.Error(w, "guests must be between 0 and 99", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "guests must be between 0 and 99")
 		return
 	}
 	// guests only makes sense for "in" RSVPs
@@ -326,11 +326,11 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 	var eventID string
 	err := h.DB.QueryRow(`SELECT id FROM events WHERE slug = $1`, slug).Scan(&eventID)
 	if err == sql.ErrNoRows {
-		http.Error(w, "event not found", http.StatusNotFound)
+		JSONError(w, http.StatusNotFound, "event not found")
 		return
 	}
 	if err != nil {
-		http.Error(w, "failed to fetch event", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to fetch event")
 		return
 	}
 
@@ -343,7 +343,7 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 	`, eventID, body.Name, body.Status, body.Guests, body.NotifyVia)
 	if err != nil {
 		log.Printf("upsert error: %v", err)
-		http.Error(w, "failed to save response", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to save response")
 		return
 	}
 
@@ -354,7 +354,7 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		ORDER BY created_at ASC
 	`, eventID)
 	if err != nil {
-		http.Error(w, "failed to fetch responses", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to fetch responses")
 		return
 	}
 	defer rows.Close()
@@ -364,7 +364,7 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		var resp Response
 		if err := rows.Scan(&resp.ID, &resp.EventID, &resp.Name,
 			&resp.Status, &resp.Guests, &resp.NotifyVia, &resp.CreatedAt); err != nil {
-			http.Error(w, "failed to scan response", http.StatusInternalServerError)
+			JSONError(w, http.StatusInternalServerError, "failed to scan response")
 			return
 		}
 		responses = append(responses, resp)
