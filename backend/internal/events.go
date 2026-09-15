@@ -180,6 +180,10 @@ func (h *EventHandlers) pingFBScraper(slug string) {
 // RescrapeEvent lets an admin manually re-trigger the FB scraper ping for an
 // existing event — useful when a group chat has a stale cached preview.
 func (h *EventHandlers) RescrapeEvent(w http.ResponseWriter, r *http.Request) {
+	if !adminAuth(h.AdminSecret, r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	slug := chi.URLParam(r, "slug")
 	go h.pingFBScraper(slug)
 	w.Header().Set("Content-Type", "application/json")

@@ -86,7 +86,6 @@ func main() {
 
 	r.Get("/og/{slug}", h.OGImage)
 	r.Get("/og-preview/{slug}", h.OGPreview)
-	r.Post("/events/{slug}/rescrape", h.RescrapeEvent)
 
 	r.Get("/settings/retention", h.GetRetention)
 
@@ -94,6 +93,7 @@ func main() {
 		r.Get("/events", h.AdminGetEvents)
 		r.Patch("/events/{slug}", h.AdminUpdateEvent)
 		r.Delete("/events/{slug}", h.AdminDeleteEvent)
+		r.Post("/events/{slug}/rescrape", h.RescrapeEvent)
 		r.Delete("/responses/{id}", h.AdminDeleteResponse)
 		r.Patch("/settings", h.AdminUpdateSettings)
 	})

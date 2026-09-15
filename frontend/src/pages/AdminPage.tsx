@@ -210,13 +210,13 @@ export default function AdminPage() {
   }
 
   async function rescrapeSelected() {
-    if (selected.size === 0) return
+    if (selected.size === 0 || !key) return
     setRescraping(true)
     setRescrapeStatus(null)
     const slugs = [...selected]
     let done = 0
     await Promise.all(slugs.map(async slug => {
-      await fetch(`${API}/events/${slug}/rescrape`, { method: 'POST' })
+      await fetch(`${API}/admin/events/${slug}/rescrape`, { method: 'POST', headers: authHeaders(key) })
       done++
       setRescrapeStatus(`${done}/${slugs.length}`)
     }))
