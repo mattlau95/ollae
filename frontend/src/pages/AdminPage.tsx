@@ -66,28 +66,23 @@ export default function AdminPage() {
   const [rescraping, setRescraping] = useState(false)
   const [rescrapeStatus, setRescrapeStatus] = useState<string | null>(null)
 
-  async function fetchData(k: string) {
-    try {
-      const res = await fetch(`${API}/admin/events`, { headers: authHeaders(k) })
-      if (res.status === 401) {
-        sessionStorage.removeItem(STORAGE_KEY)
-        setKey(null)
-        setAuthError(true)
-        return
-      }
-      if (!res.ok) throw new Error()
-      const json: AdminData = await res.json()
-      setData(json)
-      setRetentionInput(String(json.retention_months))
-    } catch {
-      alert('Failed to load data.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    if (key) fetchData(key)
+    if (!key) return
+    fetch(`${API}/admin/events`, { headers: authHeaders(key) })
+      .then(async res => {
+        if (res.status === 401) {
+          sessionStorage.removeItem(STORAGE_KEY)
+          setKey(null)
+          setAuthError(true)
+          return
+        }
+        if (!res.ok) throw new Error()
+        const json: AdminData = await res.json()
+        setData(json)
+        setRetentionInput(String(json.retention_months))
+      })
+      .catch(() => alert('Failed to load data.'))
+      .finally(() => setLoading(false))
   }, [key])
 
   function handleLogin(e: React.FormEvent) {
