@@ -1,4 +1,6 @@
-# Showup.gg — Dev Log
+# Ollae — Dev Log
+
+*(Started life as Showup.gg — see Session 09 for the rename. Earlier entries keep the original name.)*
 ## Session 01 — May 14, 2026
 
 ---
