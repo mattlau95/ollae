@@ -371,6 +371,7 @@ export default function RSVPPage() {
               <input
                 id="rsvp-name"
                 type="text"
+                autoComplete="name"
                 placeholder="Enter name here"
                 value={name}
                 onChange={e => setName(e.target.value)}
@@ -488,6 +489,7 @@ export default function RSVPPage() {
                 <input
                   id="remind-email"
                   type="email"
+                  autoComplete="email"
                   placeholder="Your email address"
                   value={notifyVia}
                   onChange={e => setNotifyVia(e.target.value)}
