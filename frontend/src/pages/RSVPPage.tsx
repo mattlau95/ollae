@@ -39,6 +39,7 @@ export default function RSVPPage() {
   }, [])
 
   const [event, setEvent] = useState<Event | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const [responses, setResponses] = useState<Response[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -74,7 +75,8 @@ export default function RSVPPage() {
   useEffect(() => {
     fetch(`${API}/events/${slug}`)
       .then(r => {
-        if (!r.ok) throw new Error('Event not found')
+        if (r.status === 404) throw new Error('not_found')
+        if (!r.ok) throw new Error('failed')
         return r.json()
       })
       .then(data => {
@@ -117,10 +119,10 @@ export default function RSVPPage() {
         setMeta('og:type', 'website')
       })
       .catch(e => {
-        setError(e.message)
+        setError(e instanceof Error && e.message === 'not_found' ? 'not_found' : 'failed')
         setLoading(false)
       })
-  }, [slug])
+  }, [slug, attempt])
 
   async function handleSaveEdit() {
     if (!slug || !adminToken || !editTitle.trim()) return
@@ -176,14 +178,29 @@ export default function RSVPPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-bg-base flex items-center justify-center text-text-muted">
+    <div role="status" aria-live="polite" className="min-h-screen bg-bg-base flex items-center justify-center text-text-muted">
       Loading...
     </div>
   )
 
   if (error) return (
-    <div className="min-h-screen bg-bg-base flex items-center justify-center text-text-muted">
-      {error}
+    <div role="alert" className="min-h-screen bg-bg-base flex flex-col items-center justify-center gap-6 px-6 text-center">
+      <p className="text-lg text-text-primary max-w-xs">
+        {error === 'not_found'
+          ? "This event doesn't exist — it may have expired, or the link is wrong."
+          : "Couldn't load this event. Check your connection and try again."}
+      </p>
+      {error !== 'not_found' && (
+        <button
+          onClick={() => { setError(null); setLoading(true); setAttempt(a => a + 1) }}
+          className="px-6 py-3 rounded-xl bg-[#F59E0B] text-[#F8FAFC] text-base font-medium hover:opacity-90 transition-opacity"
+        >
+          Try again
+        </button>
+      )}
+      <a href="/" className="text-base text-text-muted underline underline-offset-2 hover:text-text-primary transition-colors">
+        Create your own event
+      </a>
     </div>
   )
 
