@@ -37,7 +37,7 @@ func (noBodyWriter) Write([]byte) (int, error) { return 0, nil }
 func main() {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://postgres:Q94BjBR!s*lsCn@localhost:5432/showup?sslmode=disable"
+		log.Fatal("DATABASE_URL is required")
 	}
 	db := internal.NewDB(dbURL)
 	internal.RunMigrations(db)

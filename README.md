@@ -90,7 +90,7 @@ Browser → ollae.app (Vercel) → ollae-backend.fly.dev (Fly.io) → Postgres (
 cd backend
 go run ./cmd/main.go
 # Runs on :8080
-# Requires DATABASE_URL env var or local Postgres
+# Requires DATABASE_URL, e.g. postgres://user:pass@localhost:5432/ollae?sslmode=disable
 ```
 
 **Frontend:**
