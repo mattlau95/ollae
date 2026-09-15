@@ -1514,6 +1514,56 @@ For any page that needs to serve both a JS SPA and OG crawlers from the same URL
 
 ---
 
+## Session 18 — Jun 3, 2026
+
+---
+
+### What We Built
+
+Closed MAT-97 (WeChat OG fix — already shipped in Session 17, just needed the Linear ticket closed) and shipped MAT-98: the hardcoded 🏐 volleyball emoji in the RSVP activity feed and confirmation status line is now replaced with the Claude-generated event emoji.
+
+---
+
+### Issues Closed
+
+**MAT-97 — WeChat OG preview not showing**
+Fix was already in production (Session 17). Closed the ticket.
+
+**MAT-98 — RSVP: use Claude-generated sport emoji in status text**
+
+---
+
+### What Changed
+
+The RSVP page had two places that hardcoded 🏐:
+
+1. **Activity feed** — "Matthew is in 🏐" (the `statusText()` utility, `RSVPPage.tsx:503`)
+2. **Confirmation status line** — "Matthew · I'm in 🏐" (the `SuccessScreen` component, `RSVPPage.tsx:485`)
+
+Both now use the event's Claude-generated emoji (e.g. ⚽ for soccer, 🍴 for lunch). The big 🙌 on the confirmation screen is intentionally unchanged — that's reacting to the user's action, not labelling the event type.
+
+The Claude-generated emoji was already in the system: `pickEmoji()` in `backend/internal/events.go` calls Claude Haiku at event creation time with the prompt *"Reply with a single emoji that best represents the event."* The emoji is stored in the `events` table and already returned in `GET /events/:slug` — the frontend just wasn't using it.
+
+**Frontend changes (RSVPPage.tsx only):**
+
+- Added `emoji?: string` to the `Event` type
+- `statusText(status, guests, emoji)` — added `emoji` as a third param (default `'🎉'`), used in the "is in" return value
+- `SuccessScreen` — added `eventEmoji` prop, used in the status line; call site passes `event?.emoji || '🎉'`
+- Activity feed call site passes `event?.emoji || '🎉'` to `statusText()`
+
+---
+
+### Product Note
+
+The Claude prompt is generic, not sports-only: "Team Lunch" gets a food emoji, "Birthday party" gets 🎂, etc. The emoji is set once at event creation and reused everywhere — OG image, activity feed, confirmation screen — so the event's personality is consistent across all surfaces.
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
+*Tools: Claude Code · Linear*
+
+---
+
 ## Session 19 — Jun 3, 2026
 
 ---
@@ -1611,56 +1661,6 @@ Adding the `Authorization` header to API calls required adding it to the CORS `A
 **DELETE method CORS**
 
 Same story for `DELETE` — it needed to be added to `AllowedMethods`. Previously only `GET, HEAD, POST, PATCH, OPTIONS` were allowed.
-
----
-
-*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
-*Tools: Claude Code · Linear*
-
----
-
-## Session 18 — Jun 3, 2026
-
----
-
-### What We Built
-
-Closed MAT-97 (WeChat OG fix — already shipped in Session 17, just needed the Linear ticket closed) and shipped MAT-98: the hardcoded 🏐 volleyball emoji in the RSVP activity feed and confirmation status line is now replaced with the Claude-generated event emoji.
-
----
-
-### Issues Closed
-
-**MAT-97 — WeChat OG preview not showing**
-Fix was already in production (Session 17). Closed the ticket.
-
-**MAT-98 — RSVP: use Claude-generated sport emoji in status text**
-
----
-
-### What Changed
-
-The RSVP page had two places that hardcoded 🏐:
-
-1. **Activity feed** — "Matthew is in 🏐" (the `statusText()` utility, `RSVPPage.tsx:503`)
-2. **Confirmation status line** — "Matthew · I'm in 🏐" (the `SuccessScreen` component, `RSVPPage.tsx:485`)
-
-Both now use the event's Claude-generated emoji (e.g. ⚽ for soccer, 🍴 for lunch). The big 🙌 on the confirmation screen is intentionally unchanged — that's reacting to the user's action, not labelling the event type.
-
-The Claude-generated emoji was already in the system: `pickEmoji()` in `backend/internal/events.go` calls Claude Haiku at event creation time with the prompt *"Reply with a single emoji that best represents the event."* The emoji is stored in the `events` table and already returned in `GET /events/:slug` — the frontend just wasn't using it.
-
-**Frontend changes (RSVPPage.tsx only):**
-
-- Added `emoji?: string` to the `Event` type
-- `statusText(status, guests, emoji)` — added `emoji` as a third param (default `'🎉'`), used in the "is in" return value
-- `SuccessScreen` — added `eventEmoji` prop, used in the status line; call site passes `event?.emoji || '🎉'`
-- Activity feed call site passes `event?.emoji || '🎉'` to `statusText()`
-
----
-
-### Product Note
-
-The Claude prompt is generic, not sports-only: "Team Lunch" gets a food emoji, "Birthday party" gets 🎂, etc. The emoji is set once at event creation and reused everywhere — OG image, activity feed, confirmation screen — so the event's personality is consistent across all surfaces.
 
 ---
 
