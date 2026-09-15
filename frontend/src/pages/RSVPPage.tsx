@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { celebrate } from '../celebrate'
 
-import { API } from '../api'
+import { api } from '../api'
 import { Toast } from '../Toast'
 
 type Response = {
@@ -42,6 +42,7 @@ export default function RSVPPage() {
   const [event, setEvent] = useState<Event | null>(null)
   const [attempt, setAttempt] = useState(0)
   const [toast, setToast] = useState<string | null>(null)
+  const [slow, setSlow] = useState(false)
   const [responses, setResponses] = useState<Response[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -75,7 +76,7 @@ export default function RSVPPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch(`${API}/events/${slug}`)
+    api(`/events/${slug}`)
       .then(r => {
         if (r.status === 404) throw new Error('not_found')
         if (!r.ok) throw new Error('failed')
@@ -126,6 +127,12 @@ export default function RSVPPage() {
       })
   }, [slug, attempt])
 
+  useEffect(() => {
+    if (!loading) return
+    const id = setTimeout(() => setSlow(true), 3000)
+    return () => clearTimeout(id)
+  }, [loading])
+
   async function handleSaveEdit() {
     if (!slug || !adminToken || !editTitle.trim()) return
     setSaving(true)
@@ -133,7 +140,7 @@ export default function RSVPPage() {
       const eventDate = editDate
         ? (editTime ? `${editDate}T${editTime}:00` : `${editDate}T00:00:00`)
         : undefined
-      const res = await fetch(`${API}/events/${slug}?admin=${adminToken}`, {
+      const res = await api(`/events/${slug}?admin=${adminToken}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -162,7 +169,7 @@ export default function RSVPPage() {
     if (!status) return
     setSubmitting(true)
     try {
-      const res = await fetch(`${API}/events/${slug}/rsvp`, {
+      const res = await api(`/events/${slug}/rsvp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -185,7 +192,7 @@ export default function RSVPPage() {
 
   if (loading) return (
     <div role="status" aria-live="polite" className="min-h-screen bg-bg-base flex items-center justify-center text-text-muted">
-      Loading...
+      {slow ? 'Waking up the server — one sec…' : 'Loading...'}
     </div>
   )
 
@@ -198,7 +205,7 @@ export default function RSVPPage() {
       </p>
       {error !== 'not_found' && (
         <button
-          onClick={() => { setError(null); setLoading(true); setAttempt(a => a + 1) }}
+          onClick={() => { setError(null); setSlow(false); setLoading(true); setAttempt(a => a + 1) }}
           className="px-6 py-3 rounded-xl bg-[#F59E0B] text-[#F8FAFC] text-base font-medium hover:opacity-90 transition-opacity"
         >
           Try again

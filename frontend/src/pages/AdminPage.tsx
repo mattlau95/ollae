@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { API } from '../api'
+import { api } from '../api'
 import { Toast } from '../Toast'
 const STORAGE_KEY = 'ollae_admin_key'
 
@@ -70,7 +70,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!key) return
-    fetch(`${API}/admin/events`, { headers: authHeaders(key) })
+    api(`/admin/events`, { headers: authHeaders(key) })
       .then(async res => {
         if (res.status === 401) {
           sessionStorage.removeItem(STORAGE_KEY)
@@ -106,13 +106,13 @@ export default function AdminPage() {
 
   async function deleteEvent(slug: string, title: string) {
     if (!window.confirm(`Delete "${title}" and all its responses?`)) return
-    await fetch(`${API}/admin/events/${slug}`, { method: 'DELETE', headers: authHeaders(key!) })
+    await api(`/admin/events/${slug}`, { method: 'DELETE', headers: authHeaders(key!) })
     setData(prev => prev ? { ...prev, events: prev.events.filter(e => e.slug !== slug) } : null)
   }
 
   async function deleteResponse(eventSlug: string, responseId: string, name: string) {
     if (!window.confirm(`Delete ${name}'s response?`)) return
-    await fetch(`${API}/admin/responses/${responseId}`, { method: 'DELETE', headers: authHeaders(key!) })
+    await api(`/admin/responses/${responseId}`, { method: 'DELETE', headers: authHeaders(key!) })
     setData(prev => {
       if (!prev) return null
       return {
@@ -138,7 +138,7 @@ export default function AdminPage() {
   async function saveEdit(slug: string) {
     setEditSaving(true)
     try {
-      const res = await fetch(`${API}/admin/events/${slug}`, {
+      const res = await api(`/admin/events/${slug}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders(key!) },
         body: JSON.stringify({
@@ -169,7 +169,7 @@ export default function AdminPage() {
     }
     setRetentionSaving(true)
     try {
-      await fetch(`${API}/admin/settings`, {
+      await api(`/admin/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders(key!) },
         body: JSON.stringify({ retention_months: months }),
@@ -215,7 +215,7 @@ export default function AdminPage() {
     const slugs = [...selected]
     let done = 0
     await Promise.all(slugs.map(async slug => {
-      await fetch(`${API}/admin/events/${slug}/rescrape`, { method: 'POST', headers: authHeaders(key) })
+      await api(`/admin/events/${slug}/rescrape`, { method: 'POST', headers: authHeaders(key) })
       done++
       setRescrapeStatus(`${done}/${slugs.length}`)
     }))
@@ -230,7 +230,7 @@ export default function AdminPage() {
     setBatchDeleting(true)
     const slugs = [...selected]
     await Promise.all(slugs.map(slug =>
-      fetch(`${API}/admin/events/${slug}`, { method: 'DELETE', headers: authHeaders(key!) })
+      api(`/admin/events/${slug}`, { method: 'DELETE', headers: authHeaders(key!) })
     ))
     setData(prev => prev ? { ...prev, events: prev.events.filter(e => !selected.has(e.slug)) } : null)
     setSelected(new Set())

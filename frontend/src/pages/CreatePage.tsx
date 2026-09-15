@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { celebrate } from '../celebrate'
 
-import { API } from '../api'
+import { API, api } from '../api'
 import { Toast } from '../Toast'
 
 export default function CreatePage() {
@@ -10,7 +10,7 @@ export default function CreatePage() {
 
   const [retentionMonths, setRetentionMonths] = useState<number | null>(null)
   useEffect(() => {
-    fetch(`${API}/settings/retention`)
+    api(`/settings/retention`)
       .then(r => r.json())
       .then(d => setRetentionMonths(d.retention_months))
       .catch(() => {})
@@ -106,7 +106,7 @@ export default function CreatePage() {
     if (!canCreate) return
     setSubmitting(true)
     try {
-      const res = await fetch(`${API}/events`, {
+      const res = await api(`/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -132,8 +132,8 @@ export default function CreatePage() {
     if (!slug || !canCreate) return
     setSubmitting(true)
     try {
-      const url = adminToken ? `${API}/events/${slug}?admin=${adminToken}` : `${API}/events/${slug}`
-      const res = await fetch(url, {
+      const url = adminToken ? `/events/${slug}?admin=${adminToken}` : `/events/${slug}`
+      const res = await api(url, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
