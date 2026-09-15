@@ -35,6 +35,7 @@ Ollae is just a link. The organizer creates an event and shares the URL. Partici
 | Frontend | React 19 · TypeScript · Vite · Tailwind CSS v4 |
 | Backend | Go 1.26.3 · chi v5 |
 | Database | PostgreSQL 18 · lib/pq |
+| AI | Claude Haiku 4.5 (Anthropic Messages API) — natural-language event parsing, called server-side |
 | Hosting | Vercel (frontend) · Fly.io (backend + Postgres) |
 | Design | Figma · Inter · realfavicongenerator.net |
 
@@ -47,15 +48,24 @@ ollae/
 ├── frontend/        # React + Vite SPA → deployed to Vercel
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── CreatePage.tsx   # Event creation + share link
-│   │   │   └── RSVPPage.tsx     # Event view + RSVP form + activity feed
-│   │   └── App.tsx              # React Router setup
+│   │   │   ├── CreatePage.tsx   # Describe → parse → edit → share link
+│   │   │   ├── RSVPPage.tsx     # Event view + RSVP form + activity feed
+│   │   │   └── AdminPage.tsx    # Password-gated dashboard: events, deletes, retention
+│   │   ├── App.tsx              # React Router setup
+│   │   ├── api.ts               # API base URL
+│   │   └── celebrate.ts         # Confetti, gated on prefers-reduced-motion
+│   ├── vercel.json              # SPA rewrites + crawler routing for /events/:slug
 │   └── public/                  # Favicon, logo, web manifest
 └── backend/         # Go REST API → deployed to Fly.io
     ├── cmd/main.go              # Server setup, routing, CORS
+    ├── docs/ollae-devlog.md     # Session-by-session build log
     └── internal/
-        ├── events.go            # Handlers: create, get, update event, RSVP upsert
-        └── db.go                # Postgres connection
+        ├── events.go            # Create / get / update event, RSVP upsert
+        ├── parse.go             # Natural-language event parsing via the Claude API
+        ├── og.go                # OG image rendering + crawler-facing preview page
+        ├── reminders.go         # "Remind me" emails (Resend), cron-triggered
+        ├── admin.go             # Bearer-token admin endpoints, retention setting
+        └── db.go                # Postgres connection + migrations
 ```
 
 **Request flow:**
@@ -64,10 +74,17 @@ Browser → ollae.app (Vercel) → ollae-backend.fly.dev (Fly.io) → Postgres (
 ```
 
 **Routing:**
-- `GET  /events/:slug`       — fetch event + all responses
-- `POST /events`             — create event, returns generated slug
-- `PATCH /events/:slug`      — update event title/date/location
-- `POST /events/:slug/rsvp`  — upsert RSVP (case-insensitive name dedup)
+- `POST  /parse-event`         — natural language → structured event (Claude)
+- `POST  /events`              — create event, returns slug + admin token
+- `GET   /events/:slug`        — fetch event + all responses
+- `PATCH /events/:slug`        — update event (requires `?admin=<token>`)
+- `POST  /events/:slug/rsvp`   — upsert RSVP (case-insensitive name dedup)
+- `GET   /og/:slug`            — 1200×630 preview image, rendered server-side
+- `GET   /og-preview/:slug`    — crawler-facing HTML with OG tags (see `vercel.json`)
+- `GET   /cron/remind`         — send due reminder emails (token-protected)
+- `/admin/*`                   — dashboard endpoints, bearer-token auth
+
+**Share-link routing.** A tap on `ollae.app/events/:slug` from a chat app is first served by `/og-preview/:slug`, so link-preview crawlers see static OG tags without running JavaScript. Real browsers are bounced into the SPA with `?_src=app`, which `vercel.json` rewrites to `index.html`.
 
 ---
 
@@ -93,6 +110,9 @@ cd backend
 go run ./cmd/main.go
 # Runs on :8080
 # Requires DATABASE_URL, e.g. postgres://user:pass@localhost:5432/ollae?sslmode=disable
+# Optional: ANTHROPIC_API_KEY (natural-language parsing; without it the form
+#   falls back to manual entry), ADMIN_SECRET (/admin), RESEND_API_KEY + CRON_TOKEN
+#   (reminder emails), FB_APP_TOKEN (preview rescrape), FRONTEND_URL (extra CORS origin)
 ```
 
 **Frontend:**
