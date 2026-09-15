@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -27,7 +28,12 @@ type AdminEvent struct {
 }
 
 func adminAuth(secret string, r *http.Request) bool {
-	return secret != "" && r.Header.Get("Authorization") == "Bearer "+secret
+	if secret == "" {
+		return false
+	}
+	got := []byte(r.Header.Get("Authorization"))
+	want := []byte("Bearer " + secret)
+	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
 func getRetentionMonths(db *sql.DB) int {
