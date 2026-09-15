@@ -315,8 +315,9 @@ export default function AdminPage() {
               checked={selected.size === data.events.length && data.events.length > 0}
               ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < data.events.length }}
               onChange={e => e.target.checked ? selectAll() : deselectAll()}
-              className="accent-amber-500 cursor-pointer"
+              className="accent-amber-500 cursor-pointer w-5 h-5"
               title="Select all"
+              aria-label="Select all events"
             />
             {selected.size > 0 ? (
               <>
@@ -359,7 +360,8 @@ export default function AdminPage() {
                 type="checkbox"
                 checked={selected.has(ev.slug)}
                 onChange={() => toggleSelect(ev.slug)}
-                className="accent-amber-500 cursor-pointer shrink-0"
+                className="accent-amber-500 cursor-pointer shrink-0 w-5 h-5"
+                aria-label={`Select ${ev.title}`}
               />
               <span className="text-xl shrink-0">{ev.emoji || '📅'}</span>
 
@@ -422,15 +424,18 @@ export default function AdminPage() {
                 <span className="text-amber-400">{ev.counts.remind_me}?</span>
                 <button
                   onClick={() => toggleExpand(ev.slug)}
-                  className="text-gray-400 hover:text-gray-300 transition-colors ml-1 text-sm w-4"
+                  className="text-gray-400 hover:text-gray-300 transition-colors ml-1 text-sm w-6 h-6 inline-flex items-center justify-center"
                   title={expanded.has(ev.slug) ? 'Collapse' : 'Expand'}
+                  aria-label={expanded.has(ev.slug) ? 'Collapse responses' : 'Expand responses'}
+                  aria-expanded={expanded.has(ev.slug)}
                 >
                   {expanded.has(ev.slug) ? '↑' : '↓'}
                 </button>
                 <button
                   onClick={() => deleteEvent(ev.slug, ev.title)}
-                  className="text-gray-400 hover:text-red-400 transition-colors text-sm"
+                  className="text-gray-400 hover:text-red-400 transition-colors text-sm w-6 h-6 inline-flex items-center justify-center"
                   title="Delete event"
+                  aria-label={`Delete event ${ev.title}`}
                 >
                   ✕
                 </button>
@@ -460,8 +465,9 @@ export default function AdminPage() {
                       </span>
                       <button
                         onClick={() => deleteResponse(ev.slug, resp.id, resp.name)}
-                        className="text-gray-400 hover:text-red-400 transition-colors text-xs shrink-0"
+                        className="text-gray-400 hover:text-red-400 transition-colors text-xs shrink-0 w-6 h-6 inline-flex items-center justify-center"
                         title="Delete response"
+                        aria-label={`Delete response from ${resp.name}`}
                       >
                         ✕
                       </button>
