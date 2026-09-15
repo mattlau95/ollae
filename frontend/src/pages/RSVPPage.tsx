@@ -314,6 +314,9 @@ export default function RSVPPage() {
             <span className="text-2xl font-normal text-text-primary">attending</span>
           </div>
 
+          {responses.length === 0 && (
+            <p className="text-base text-text-muted">No one's responded yet — be the first.</p>
+          )}
           {responses.length > 0 && (
             <>
               <div className="bg-bg-surface rounded-lg overflow-hidden">
