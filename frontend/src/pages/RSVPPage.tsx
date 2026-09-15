@@ -231,8 +231,9 @@ export default function RSVPPage() {
           <div className="flex flex-col gap-3 bg-bg-elevated rounded-2xl p-5">
             <p className="text-xs font-semibold text-text-muted uppercase tracking-wide">Edit Event</p>
             <div className="flex flex-col gap-2">
-              <label className="text-xs text-text-primary">Event Name</label>
+              <label htmlFor="edit-title" className="text-xs text-text-primary">Event Name</label>
               <input
+                id="edit-title"
                 type="text"
                 value={editTitle}
                 onChange={e => setEditTitle(e.target.value)}
@@ -241,8 +242,9 @@ export default function RSVPPage() {
             </div>
             <div className="flex gap-3">
               <div className="flex flex-col gap-2 flex-1 min-w-0">
-                <label className="text-xs text-text-primary">Date</label>
+                <label htmlFor="edit-date" className="text-xs text-text-primary">Date</label>
                 <input
+                  id="edit-date"
                   type="date"
                   value={editDate}
                   onChange={e => setEditDate(e.target.value)}
@@ -250,8 +252,9 @@ export default function RSVPPage() {
                 />
               </div>
               <div className="flex flex-col gap-2 flex-1 min-w-0">
-                <label className="text-xs text-text-primary">Time</label>
+                <label htmlFor="edit-time" className="text-xs text-text-primary">Time</label>
                 <input
+                  id="edit-time"
                   type="time"
                   value={editTime}
                   onChange={e => setEditTime(e.target.value)}
@@ -260,8 +263,9 @@ export default function RSVPPage() {
               </div>
             </div>
             <div className="flex flex-col gap-2">
-              <label className="text-xs text-text-primary">Location</label>
+              <label htmlFor="edit-location" className="text-xs text-text-primary">Location</label>
               <input
+                id="edit-location"
                 type="text"
                 value={editLocation}
                 onChange={e => setEditLocation(e.target.value)}

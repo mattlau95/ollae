@@ -228,8 +228,9 @@ export default function CreatePage() {
 
             <div className={`flex flex-col gap-3 transition-opacity ${isLocked ? 'opacity-[0.45] pointer-events-none' : ''}`}>
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-normal text-text-primary">Event Name</label>
+                <label htmlFor="event-title" className="text-xs font-normal text-text-primary">Event Name</label>
                 <input
+                  id="event-title"
                   type="text"
                   placeholder="Pickup Volleyball"
                   value={title}
@@ -240,8 +241,9 @@ export default function CreatePage() {
 
               <div className="flex gap-3">
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
-                  <label className="text-xs font-normal text-text-primary">Date</label>
+                  <label htmlFor="event-date" className="text-xs font-normal text-text-primary">Date</label>
                   <input
+                    id="event-date"
                     type="date"
                     value={date}
                     onChange={e => { setDate(e.target.value); clearAssumed('date') }}
@@ -249,8 +251,9 @@ export default function CreatePage() {
                   />
                 </div>
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
-                  <label className="text-xs font-normal text-text-primary">Time</label>
+                  <label htmlFor="event-time" className="text-xs font-normal text-text-primary">Time</label>
                   <input
+                    id="event-time"
                     type="time"
                     value={time}
                     onChange={e => { setTime(e.target.value); clearAssumed('time') }}
@@ -260,8 +263,9 @@ export default function CreatePage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-normal text-text-primary">Location</label>
+                <label htmlFor="event-location" className="text-xs font-normal text-text-primary">Location</label>
                 <input
+                  id="event-location"
                   type="text"
                   placeholder="Venice Beach Court 4"
                   value={location}
