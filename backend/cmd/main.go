@@ -39,7 +39,10 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL is required")
 	}
-	db := internal.NewDB(dbURL)
+	db, err := internal.NewDB(dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
 	internal.RunMigrations(db)
 
 	resendKey := os.Getenv("RESEND_API_KEY")

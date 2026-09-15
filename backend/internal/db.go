@@ -8,16 +8,16 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func NewDB(connStr string) *sql.DB {
+func NewDB(connStr string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		log.Fatalf("failed to open db: %v", err)
+		return nil, fmt.Errorf("open db: %w", err)
 	}
 	if err := db.Ping(); err != nil {
-		log.Fatalf("failed to connect to db: %v", err)
+		return nil, fmt.Errorf("connect to db: %w", err)
 	}
-	fmt.Println("Database connected")
-	return db
+	log.Println("Database connected")
+	return db, nil
 }
 
 func RunMigrations(db *sql.DB) {
