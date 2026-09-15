@@ -206,7 +206,7 @@ export default function CreatePage() {
                   : 'bg-bg-surface text-text-muted border-white/[0.08] cursor-not-allowed'
               }`}
             >
-              {parsing ? 'Creating...' : 'Create Event →'}
+              {parsing ? 'Filling in the details…' : 'Create Event →'}
             </button>
             <div className="flex justify-center">
               <button
