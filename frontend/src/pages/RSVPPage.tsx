@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import confetti from 'canvas-confetti'
+import { celebrate } from '../celebrate'
 
 import { API } from '../api'
 
@@ -499,7 +499,7 @@ export default function RSVPPage() {
 function SuccessScreen({ name, status, guests, eventEmoji, onBack }: { name: string; status: RSVPStatus; guests: number; eventEmoji: string; onBack: () => void }) {
   useEffect(() => {
     if (status !== 'in') return
-    confetti({ particleCount: 80, spread: 55, origin: { y: 0.5 }, ticks: 180 })
+    celebrate()
   }, [status])
 
   const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'

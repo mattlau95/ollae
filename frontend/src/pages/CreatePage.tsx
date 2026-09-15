@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import confetti from 'canvas-confetti'
+import { celebrate } from '../celebrate'
 
 import { API } from '../api'
 
@@ -117,7 +117,7 @@ export default function CreatePage() {
       const event = await res.json()
       setSlug(event.slug)
       setAdminToken(event.admin_token ?? null)
-      confetti({ particleCount: 80, spread: 55, origin: { y: 0.5 }, ticks: 180 })
+      celebrate()
     } catch {
       alert('Something went wrong. Try again.')
     } finally {
