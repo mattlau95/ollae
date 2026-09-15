@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-const API = window.location.hostname === 'localhost' ? 'http://localhost:8080' : 'https://ollae-backend.fly.dev'
+import { API } from '../api'
 const STORAGE_KEY = 'ollae_admin_key'
 
 type AdminResponse = {
