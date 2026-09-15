@@ -81,6 +81,8 @@ Browser → ollae.app (Vercel) → ollae-backend.fly.dev (Fly.io) → Postgres (
 
 **Stateless change flow.** No session memory means no "edit your RSVP" button. The success screen tells participants: reopen the link, resubmit your name. The upsert handles the rest.
 
+**Organizer edit links are bearer tokens in the URL.** The creator gets a second link with `?admin=<token>` that unlocks editing. This is a deliberate trade-off for a no-accounts product: the edit link is exactly as easy to save and share as the event link. The cost is that the token sits in browser history and request logs and can't be rotated — acceptable for low-stakes social plans, not the right model for anything sensitive.
+
 ---
 
 ## Local Development
