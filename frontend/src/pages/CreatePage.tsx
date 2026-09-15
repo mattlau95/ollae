@@ -183,7 +183,9 @@ export default function CreatePage() {
               <h1 className="text-[28px] font-semibold text-text-primary leading-tight">Create Event</h1>
               <p className="text-sm text-text-muted">Describe it — our integrated Claude API will fill in the details.</p>
             </div>
+            <label htmlFor="nl-input" className="sr-only">Describe your event</label>
             <textarea
+              id="nl-input"
               placeholder={"e.g. Volleyball this Saturday at 2pm, Venice Beach Court 4"}
               value={nlInput}
               onChange={e => setNlInput(e.target.value)}

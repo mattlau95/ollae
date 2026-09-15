@@ -329,7 +329,9 @@ export default function RSVPPage() {
 
             {/* Name input */}
             <div className="flex flex-col gap-3">
+              <label htmlFor="rsvp-name" className="sr-only">Your name</label>
               <input
+                id="rsvp-name"
                 type="text"
                 placeholder="Enter name here"
                 value={name}
@@ -444,7 +446,9 @@ export default function RSVPPage() {
             </div>
             {status === 'remind_me' && (
               <div className="flex flex-col gap-3">
+                <label htmlFor="remind-email" className="sr-only">Email address for the reminder</label>
                 <input
+                  id="remind-email"
                   type="email"
                   placeholder="Your email address"
                   value={notifyVia}

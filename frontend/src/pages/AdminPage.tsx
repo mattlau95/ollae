@@ -244,7 +244,9 @@ export default function AdminPage() {
         <form onSubmit={handleLogin} className="flex flex-col gap-4 w-full max-w-xs">
           <h1 className="text-xl font-semibold text-gray-100">ollae admin</h1>
           {authError && <p className="text-sm text-red-400">Incorrect password.</p>}
+          <label htmlFor="admin-password" className="sr-only">Password</label>
           <input
+            id="admin-password"
             type="password"
             placeholder="Password"
             value={keyInput}
