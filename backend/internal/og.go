@@ -292,7 +292,15 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 		FROM events WHERE slug = $1
 	`, slug).Scan(&event.ID, &event.Slug, &event.Title, &event.Location, &event.EventDate, &event.CreatedAt, &event.Emoji)
 	if err != nil {
-		http.Error(w, "not found", http.StatusNotFound)
+		// Crawlers get a plain 404. Browsers are sent into the SPA, which
+		// renders its own "event not found" state; redirecting a crawler
+		// would loop, since the ?_src=app rewrite excludes bot user agents.
+		if isCrawlerUA(r.Header.Get("User-Agent")) {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		http.Redirect(w, r, fmt.Sprintf("https://ollae.app/events/%s?_src=app", slug), http.StatusFound)
 		return
 	}
 
