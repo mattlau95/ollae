@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { API } from '../api'
+import { Toast } from '../Toast'
 const STORAGE_KEY = 'ollae_admin_key'
 
 type AdminResponse = {
@@ -65,6 +66,7 @@ export default function AdminPage() {
   const [batchDeleting, setBatchDeleting] = useState(false)
   const [rescraping, setRescraping] = useState(false)
   const [rescrapeStatus, setRescrapeStatus] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
     if (!key) return
@@ -81,7 +83,7 @@ export default function AdminPage() {
         setData(json)
         setRetentionInput(String(json.retention_months))
       })
-      .catch(() => alert('Failed to load data.'))
+      .catch(() => setToast('Failed to load data.'))
       .finally(() => setLoading(false))
   }, [key])
 
@@ -153,7 +155,7 @@ export default function AdminPage() {
       } : null)
       setEditingSlug(null)
     } catch {
-      alert('Failed to save.')
+      setToast('Failed to save.')
     } finally {
       setEditSaving(false)
     }
@@ -162,7 +164,7 @@ export default function AdminPage() {
   async function saveRetention() {
     const months = parseInt(retentionInput)
     if (isNaN(months) || months < 1 || months > 24) {
-      alert('Retention must be 1–24 months.')
+      setToast('Retention must be 1–24 months.')
       return
     }
     setRetentionSaving(true)
@@ -174,7 +176,7 @@ export default function AdminPage() {
       })
       setData(prev => prev ? { ...prev, retention_months: months } : null)
     } catch {
-      alert('Failed to save retention setting.')
+      setToast('Failed to save retention setting.')
     } finally {
       setRetentionSaving(false)
     }
@@ -265,13 +267,17 @@ export default function AdminPage() {
   if (loading || !data) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-gray-400 text-sm">Loading...</p>
+        <Toast message={toast} onDismiss={() => setToast(null)} />
+        <p role="status" className="text-gray-400 text-sm">
+          {loading ? 'Loading...' : "Couldn't load the dashboard — refresh to try again."}
+        </p>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-4 sm:p-6">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-4 flex-wrap">

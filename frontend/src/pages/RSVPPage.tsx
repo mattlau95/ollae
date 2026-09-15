@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { celebrate } from '../celebrate'
 
 import { API } from '../api'
+import { Toast } from '../Toast'
 
 type Response = {
   id: string
@@ -40,6 +41,7 @@ export default function RSVPPage() {
 
   const [event, setEvent] = useState<Event | null>(null)
   const [attempt, setAttempt] = useState(0)
+  const [toast, setToast] = useState<string | null>(null)
   const [responses, setResponses] = useState<Response[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -145,14 +147,18 @@ export default function RSVPPage() {
       setEvent(updated)
       setIsEditing(false)
     } catch {
-      alert('Something went wrong. Try again.')
+      setToast('Something went wrong. Try again.')
     } finally {
       setSaving(false)
     }
   }
 
   async function handleSubmit() {
-    if (!name.trim()) { alert('Please enter your name above first.'); return }
+    if (!name.trim()) {
+      setToast('Please enter your name above first.')
+      document.getElementById('rsvp-name')?.focus()
+      return
+    }
     if (!status) return
     setSubmitting(true)
     try {
@@ -171,7 +177,7 @@ export default function RSVPPage() {
       setResponses(updated)
       setSubmitted(true)
     } catch {
-      alert('Something went wrong. Try again.')
+      setToast('Something went wrong. Try again.')
     } finally {
       setSubmitting(false)
     }
@@ -214,6 +220,7 @@ export default function RSVPPage() {
 
   return (
     <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <div className="w-full max-w-sm flex flex-col gap-6 flex-1">
 
         <Link to="/create">

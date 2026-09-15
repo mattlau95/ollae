@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { celebrate } from '../celebrate'
 
 import { API } from '../api'
+import { Toast } from '../Toast'
 
 export default function CreatePage() {
   useEffect(() => { document.title = 'Create Event · ollae.app' }, [])
@@ -32,6 +33,8 @@ export default function CreatePage() {
   const [isEditing, setIsEditing] = useState(false)
   const [copied, setCopied] = useState(false)
   const [copiedAdmin, setCopiedAdmin] = useState(false)
+
+  const [toast, setToast] = useState<string | null>(null)
 
   // Scroll the action button into view when an event is first created,
   // so the Edit button + both share cards are visible on mobile.
@@ -79,7 +82,7 @@ export default function CreatePage() {
       setAssumed(newAssumed)
       setView('form')
     } catch {
-      alert('Could not parse. Try again or fill in manually.')
+      setToast('Could not parse. Try again or fill in manually.')
     } finally {
       setParsing(false)
     }
@@ -119,7 +122,7 @@ export default function CreatePage() {
       setAdminToken(event.admin_token ?? null)
       celebrate()
     } catch {
-      alert('Something went wrong. Try again.')
+      setToast('Something went wrong. Try again.')
     } finally {
       setSubmitting(false)
     }
@@ -142,7 +145,7 @@ export default function CreatePage() {
       if (!res.ok) throw new Error('Failed to update event')
       setIsEditing(false)
     } catch {
-      alert('Something went wrong. Try again.')
+      setToast('Something went wrong. Try again.')
     } finally {
       setSubmitting(false)
     }
@@ -170,6 +173,7 @@ export default function CreatePage() {
 
   return (
     <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6 sm:py-12 overflow-y-auto">
+      <Toast message={toast} onDismiss={() => setToast(null)} />
       <div className="w-full max-w-sm flex flex-col gap-5 flex-1">
 
         <Link to="/create">
