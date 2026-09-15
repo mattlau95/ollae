@@ -265,7 +265,7 @@ export default function AdminPage() {
   if (loading || !data) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-gray-500 text-sm">Loading...</p>
+        <p className="text-gray-400 text-sm">Loading...</p>
       </div>
     )
   }
@@ -299,7 +299,7 @@ export default function AdminPage() {
             {retentionSaving ? 'Saving…' : 'Save'}
           </button>
           <span className="text-gray-700 mx-1">|</span>
-          <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+          <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-gray-300 transition-colors">
             Log out
           </button>
         </div>
@@ -338,18 +338,18 @@ export default function AdminPage() {
                 >
                   {batchDeleting ? 'Deleting…' : `Delete selected (${selected.size})`}
                 </button>
-                <button onClick={deselectAll} className="text-gray-600 hover:text-gray-400 transition-colors">
+                <button onClick={deselectAll} className="text-gray-400 hover:text-gray-200 transition-colors">
                   Deselect all
                 </button>
               </>
             ) : (
-              <span className="text-gray-600">Select all</span>
+              <span className="text-gray-400">Select all</span>
             )}
           </div>
         )}
 
         {data.events.length === 0 && (
-          <p className="text-gray-500 text-sm">No events yet.</p>
+          <p className="text-gray-400 text-sm">No events yet.</p>
         )}
         {data.events.map(ev => (
           <div key={ev.slug} className="bg-gray-800 rounded-lg overflow-hidden">
@@ -395,7 +395,7 @@ export default function AdminPage() {
                       </button>
                       <button
                         onClick={() => setEditingSlug(null)}
-                        className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                        className="text-xs text-gray-400 hover:text-gray-300 transition-colors"
                       >
                         Cancel
                       </button>
@@ -409,9 +409,9 @@ export default function AdminPage() {
                     >
                       {ev.title}
                     </button>
-                    {ev.location && <span className="text-xs text-gray-500">{ev.location}</span>}
-                    <span className="text-xs text-gray-500">{formatDate(ev.event_date)}</span>
-                    <span className="text-xs text-gray-600">{ev.slug}</span>
+                    {ev.location && <span className="text-xs text-gray-400">{ev.location}</span>}
+                    <span className="text-xs text-gray-400">{formatDate(ev.event_date)}</span>
+                    <span className="text-xs text-gray-400">{ev.slug}</span>
                   </div>
                 )}
               </div>
@@ -422,14 +422,14 @@ export default function AdminPage() {
                 <span className="text-amber-400">{ev.counts.remind_me}?</span>
                 <button
                   onClick={() => toggleExpand(ev.slug)}
-                  className="text-gray-500 hover:text-gray-300 transition-colors ml-1 text-sm w-4"
+                  className="text-gray-400 hover:text-gray-300 transition-colors ml-1 text-sm w-4"
                   title={expanded.has(ev.slug) ? 'Collapse' : 'Expand'}
                 >
                   {expanded.has(ev.slug) ? '↑' : '↓'}
                 </button>
                 <button
                   onClick={() => deleteEvent(ev.slug, ev.title)}
-                  className="text-gray-600 hover:text-red-400 transition-colors text-sm"
+                  className="text-gray-400 hover:text-red-400 transition-colors text-sm"
                   title="Delete event"
                 >
                   ✕
@@ -441,13 +441,13 @@ export default function AdminPage() {
             {expanded.has(ev.slug) && (
               <div className="border-t border-gray-700">
                 {ev.responses.length === 0 ? (
-                  <p className="text-xs text-gray-500 px-4 py-3">No responses yet.</p>
+                  <p className="text-xs text-gray-400 px-4 py-3">No responses yet.</p>
                 ) : (
                   ev.responses.map(resp => (
                     <div key={resp.id} className="flex items-center gap-3 px-4 py-2 border-b border-gray-700/40 last:border-0">
                       <span className="text-sm text-gray-300 flex-1 min-w-0 truncate">
                         <span className="font-medium">{resp.name}</span>
-                        {resp.guests > 0 && <span className="text-gray-500"> +{resp.guests}</span>}
+                        {resp.guests > 0 && <span className="text-gray-400"> +{resp.guests}</span>}
                         {' · '}
                         <span className={
                           resp.status === 'in' ? 'text-green-400' :
@@ -456,11 +456,11 @@ export default function AdminPage() {
                           {resp.status === 'in' ? 'in' : resp.status === 'out' ? 'out' : 'remind'}
                         </span>
                         {' · '}
-                        <span className="text-gray-500 text-xs">{timeAgo(resp.created_at)}</span>
+                        <span className="text-gray-400 text-xs">{timeAgo(resp.created_at)}</span>
                       </span>
                       <button
                         onClick={() => deleteResponse(ev.slug, resp.id, resp.name)}
-                        className="text-gray-600 hover:text-red-400 transition-colors text-xs shrink-0"
+                        className="text-gray-400 hover:text-red-400 transition-colors text-xs shrink-0"
                         title="Delete response"
                       >
                         ✕
