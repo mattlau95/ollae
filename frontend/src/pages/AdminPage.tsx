@@ -53,7 +53,7 @@ export default function AdminPage() {
   const [key, setKey] = useState<string | null>(() => sessionStorage.getItem(STORAGE_KEY))
   const [keyInput, setKeyInput] = useState('')
   const [authError, setAuthError] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(key !== null)
   const [data, setData] = useState<AdminData | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [editingSlug, setEditingSlug] = useState<string | null>(null)
@@ -66,12 +66,7 @@ export default function AdminPage() {
   const [rescraping, setRescraping] = useState(false)
   const [rescrapeStatus, setRescrapeStatus] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (key) fetchData(key)
-  }, [key])
-
   async function fetchData(k: string) {
-    setLoading(true)
     try {
       const res = await fetch(`${API}/admin/events`, { headers: authHeaders(k) })
       if (res.status === 401) {
@@ -91,11 +86,16 @@ export default function AdminPage() {
     }
   }
 
+  useEffect(() => {
+    if (key) fetchData(key)
+  }, [key])
+
   function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     const k = keyInput.trim()
     if (!k) return
     sessionStorage.setItem(STORAGE_KEY, k)
+    setLoading(true)
     setKey(k)
     setKeyInput('')
     setAuthError(false)
@@ -188,7 +188,8 @@ export default function AdminPage() {
   function toggleExpand(slug: string) {
     setExpanded(prev => {
       const next = new Set(prev)
-      next.has(slug) ? next.delete(slug) : next.add(slug)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
       return next
     })
   }
@@ -196,7 +197,8 @@ export default function AdminPage() {
   function toggleSelect(slug: string) {
     setSelected(prev => {
       const next = new Set(prev)
-      next.has(slug) ? next.delete(slug) : next.add(slug)
+      if (next.has(slug)) next.delete(slug)
+      else next.add(slug)
       return next
     })
   }

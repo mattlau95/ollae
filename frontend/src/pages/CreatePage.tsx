@@ -41,7 +41,7 @@ export default function CreatePage() {
         editBtnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 150)
     }
-  }, [slug])
+  }, [slug, isEditing])
 
   const eventUrl = slug ? `${window.location.origin}/events/${slug}` : ''
   const displayUrl = slug ? `${window.location.hostname}/events/${slug}` : ''

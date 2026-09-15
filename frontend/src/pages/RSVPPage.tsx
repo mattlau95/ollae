@@ -500,7 +500,7 @@ function SuccessScreen({ name, status, guests, eventEmoji, onBack }: { name: str
   useEffect(() => {
     if (status !== 'in') return
     confetti({ particleCount: 80, spread: 55, origin: { y: 0.5 }, ticks: 180 })
-  }, [])
+  }, [status])
 
   const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'
   const message = status === 'in' ? "You're on the list!" : status === 'out' ? "Got it, you're out." : "We'll remind you!"
