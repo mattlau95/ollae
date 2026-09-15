@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { celebrate } from '../celebrate'
 
-import { API, api } from '../api'
+import { api } from '../api'
 import { Toast } from '../Toast'
 
 export default function CreatePage() {
@@ -61,11 +61,16 @@ export default function CreatePage() {
     if (!nlInput.trim()) return
     setParsing(true)
     try {
-      const res = await fetch(`${API}/parse-event`, {
+      const res = await api('/parse-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: nlInput.trim() }),
+        signal: AbortSignal.timeout(30_000),
       })
+      if (res.status === 429 || res.status === 503) {
+        setToast('Busy right now — try again in a minute, or fill in the details manually.')
+        return
+      }
       if (!res.ok) throw new Error()
       const parsed = await res.json()
 
