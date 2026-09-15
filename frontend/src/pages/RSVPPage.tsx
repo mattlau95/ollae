@@ -347,7 +347,7 @@ export default function RSVPPage() {
                 <div className="flex justify-center">
                   <button
                     onClick={() => setShowAll(v => !v)}
-                    className="text-base text-text-primary underline underline-offset-2 transition-opacity hover:opacity-70"
+                    className="py-2 text-base text-text-primary underline underline-offset-2 transition-opacity hover:opacity-70"
                   >
                     {showAll ? 'Show less' : 'See All'}
                   </button>
@@ -429,7 +429,7 @@ export default function RSVPPage() {
                     <button
                       key={opt.value}
                       onClick={() => { setGuests(opt.value); setShowCustomGuests(false) }}
-                      className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                      className={`px-4 py-3 rounded-full text-sm font-medium border transition-colors ${
                         guests === opt.value && !showCustomGuests
                           ? 'bg-[#22C55E] border-[#16A34A] text-white'
                           : 'bg-bg-elevated border-white/[0.08] text-text-primary hover:border-white/25'
@@ -440,7 +440,7 @@ export default function RSVPPage() {
                   ))}
                   <button
                     onClick={() => { setShowCustomGuests(true); if (guests <= 5) setGuests(6) }}
-                    className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                    className={`px-4 py-3 rounded-full text-sm font-medium border transition-colors ${
                       showCustomGuests
                         ? 'bg-[#22C55E] border-[#16A34A] text-white'
                         : 'bg-bg-elevated border-white/[0.08] text-text-primary hover:border-white/25'
@@ -476,7 +476,7 @@ export default function RSVPPage() {
             <div className="flex justify-center">
               <button
                 onClick={() => handleSetStatus('remind_me')}
-                className={`text-base underline underline-offset-2 transition-opacity hover:opacity-70 ${
+                className={`py-2 text-base underline underline-offset-2 transition-opacity hover:opacity-70 ${
                   status === 'remind_me' ? 'text-status-remind' : 'text-text-primary'
                 }`}
               >
