@@ -5,10 +5,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 	"github.com/mattlau95/ollae-backend/internal"
 )
 
@@ -33,6 +35,19 @@ type noBodyWriter struct {
 }
 
 func (noBodyWriter) Write([]byte) (int, error) { return 0, nil }
+
+// clientIP keys rate limits on Fly's proxy-set header rather than
+// X-Forwarded-For, which a client can spoof.
+func clientIP(r *http.Request) (string, error) {
+	if ip := r.Header.Get("Fly-Client-IP"); ip != "" {
+		return ip, nil
+	}
+	return httprate.KeyByIP(r)
+}
+
+func rateLimited(w http.ResponseWriter, r *http.Request) {
+	internal.JSONError(w, http.StatusTooManyRequests, "too many requests, try again in a minute")
+}
 
 func main() {
 	dbURL := os.Getenv("DATABASE_URL")
@@ -80,7 +95,15 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	r.Post("/parse-event", h.ParseEvent)
+	// Claude parsing is the only endpoint that costs money per call: cap it
+	// per client and in total so a traffic spike can't run up the bill.
+	parseByIP := httprate.Limit(10, time.Minute,
+		httprate.WithKeyFuncs(clientIP),
+		httprate.WithLimitHandler(rateLimited))
+	parseGlobal := httprate.Limit(120, time.Minute,
+		httprate.WithKeyFuncs(func(*http.Request) (string, error) { return "global", nil }),
+		httprate.WithLimitHandler(rateLimited))
+	r.With(parseGlobal, parseByIP).Post("/parse-event", h.ParseEvent)
 	r.Post("/events", h.CreateEvent)
 	r.Get("/events/{slug}", h.GetEvent)
 	r.Patch("/events/{slug}", h.UpdateEvent)

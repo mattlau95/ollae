@@ -2,11 +2,13 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,11 +21,83 @@ type ParsedEvent struct {
 	Emoji    string  `json:"emoji"`
 }
 
-var anthropicClient = &http.Client{Timeout: 15 * time.Second}
+var (
+	anthropicClient = &http.Client{Timeout: 15 * time.Second}
+	anthropicURL    = "https://api.anthropic.com/v1/messages"
+)
+
+const (
+	anthropicAttempts = 3
+	parseDeadline     = 25 * time.Second
+	maxRetryAfter     = 5 * time.Second
+)
+
+// callAnthropic posts to the Messages API, retrying transport errors, 429s
+// and 5xxs with exponential backoff (Retry-After is honored when sent).
+// Any other status is returned to the caller as-is.
+func callAnthropic(ctx context.Context, apiKey string, payload []byte) (int, []byte, error) {
+	var (
+		lastStatus int
+		lastBody   []byte
+		lastErr    error
+		retryAfter time.Duration
+	)
+	for attempt := 0; attempt < anthropicAttempts; attempt++ {
+		if attempt > 0 {
+			delay := time.Duration(500<<(attempt-1)) * time.Millisecond
+			if retryAfter > delay {
+				delay = retryAfter
+			}
+			select {
+			case <-ctx.Done():
+				return lastStatus, lastBody, ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, anthropicURL, bytes.NewReader(payload))
+		if err != nil {
+			return 0, nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", apiKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+
+		resp, err := anthropicClient.Do(req)
+		if err != nil {
+			lastStatus, lastBody, lastErr = 0, nil, err
+			log.Printf("Anthropic API unreachable (attempt %d/%d): %v", attempt+1, anthropicAttempts, err)
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			lastStatus, lastBody, lastErr = resp.StatusCode, body, nil
+			retryAfter = parseRetryAfter(resp.Header.Get("Retry-After"))
+			log.Printf("Anthropic API %d (attempt %d/%d): %s", resp.StatusCode, attempt+1, anthropicAttempts, body)
+			continue
+		}
+		return resp.StatusCode, body, nil
+	}
+	return lastStatus, lastBody, lastErr
+}
+
+func parseRetryAfter(header string) time.Duration {
+	secs, err := strconv.Atoi(strings.TrimSpace(header))
+	if err != nil || secs <= 0 {
+		return 0
+	}
+	d := time.Duration(secs) * time.Second
+	if d > maxRetryAfter {
+		return maxRetryAfter
+	}
+	return d
+}
 
 func (h *EventHandlers) ParseEvent(w http.ResponseWriter, r *http.Request) {
 	if h.AnthropicKey == "" {
-		http.Error(w, "AI parsing not configured", http.StatusServiceUnavailable)
+		JSONError(w, http.StatusServiceUnavailable, "AI parsing not configured")
 		return
 	}
 
@@ -31,7 +105,7 @@ func (h *EventHandlers) ParseEvent(w http.ResponseWriter, r *http.Request) {
 		Input string `json:"input"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Input == "" {
-		http.Error(w, "input is required", http.StatusBadRequest)
+		JSONError(w, http.StatusBadRequest, "input is required")
 		return
 	}
 
@@ -54,27 +128,21 @@ No explanation. No markdown. JSON only.`, today)
 		"messages":   []map[string]string{{"role": "user", "content": body.Input}},
 	})
 
-	req, err := http.NewRequestWithContext(r.Context(), "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(payload))
+	ctx, cancel := context.WithTimeout(r.Context(), parseDeadline)
+	defer cancel()
+
+	status, raw, err := callAnthropic(ctx, h.AnthropicKey, payload)
 	if err != nil {
-		http.Error(w, "failed to build request", http.StatusInternalServerError)
+		JSONError(w, http.StatusBadGateway, "failed to reach Claude API")
 		return
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", h.AnthropicKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := anthropicClient.Do(req)
-	if err != nil {
-		http.Error(w, "failed to reach Claude API", http.StatusBadGateway)
+	if status == http.StatusTooManyRequests {
+		JSONError(w, http.StatusServiceUnavailable, "AI parsing is busy, try again in a moment")
 		return
 	}
-	defer resp.Body.Close()
-
-	raw, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("Anthropic API error %d: %s", resp.StatusCode, raw)
-		http.Error(w, "Claude API error", http.StatusBadGateway)
+	if status != http.StatusOK {
+		log.Printf("Anthropic API error %d: %s", status, raw)
+		JSONError(w, http.StatusBadGateway, "Claude API error")
 		return
 	}
 
@@ -85,7 +153,7 @@ No explanation. No markdown. JSON only.`, today)
 	}
 	if err := json.Unmarshal(raw, &apiResp); err != nil || len(apiResp.Content) == 0 {
 		log.Printf("Unexpected Anthropic response: %s", raw)
-		http.Error(w, "unexpected Claude API response", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "unexpected Claude API response")
 		return
 	}
 
@@ -99,7 +167,7 @@ No explanation. No markdown. JSON only.`, today)
 	var parsed ParsedEvent
 	if err := json.Unmarshal([]byte(text), &parsed); err != nil {
 		log.Printf("Failed to parse Claude JSON: %s", text)
-		http.Error(w, "failed to parse Claude response", http.StatusInternalServerError)
+		JSONError(w, http.StatusInternalServerError, "failed to parse Claude response")
 		return
 	}
 
