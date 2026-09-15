@@ -107,6 +107,7 @@ Browser → ollae.app (Vercel) → ollae-backend.fly.dev (Fly.io) → Postgres (
 **Backend:**
 ```bash
 cd backend
+go test ./...          # unit tests, no database needed
 go run ./cmd/main.go
 # Runs on :8080
 # Requires DATABASE_URL, e.g. postgres://user:pass@localhost:5432/ollae?sslmode=disable
