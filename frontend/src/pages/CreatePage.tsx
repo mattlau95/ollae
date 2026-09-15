@@ -181,7 +181,8 @@ export default function CreatePage() {
           <div className="flex flex-col gap-4 flex-1">
             <div className="flex flex-col gap-2">
               <h1 className="text-[28px] font-semibold text-text-primary leading-tight">Create Event</h1>
-              <p className="text-sm text-text-muted">Describe it — our integrated Claude API will fill in the details.</p>
+              <p className="text-base text-text-secondary">One link for group plans. Describe it, share the link, see who's in — no accounts needed.</p>
+              <p className="text-sm text-text-muted">Claude fills in the details from your description; you can edit anything before creating.</p>
             </div>
             <label htmlFor="nl-input" className="sr-only">Describe your event</label>
             <textarea
