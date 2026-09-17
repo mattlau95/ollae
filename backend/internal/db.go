@@ -28,6 +28,14 @@ func RunMigrations(db *sql.DB) {
 		);
 		INSERT INTO settings (key, value) VALUES ('retention_months', '2')
 		ON CONFLICT (key) DO NOTHING;
+
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false;
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS append_only BOOLEAN NOT NULL DEFAULT false;
+
+		CREATE TABLE IF NOT EXISTS claude_usage (
+			day   DATE PRIMARY KEY,
+			calls INT NOT NULL DEFAULT 0
+		);
 	`)
 	if err != nil {
 		log.Printf("migration warning: %v", err)

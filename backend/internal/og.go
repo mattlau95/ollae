@@ -11,6 +11,7 @@ import (
 	_ "image/png"
 	"math"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/fogleman/gg"
@@ -268,6 +269,18 @@ func (h *EventHandlers) OGImage(w http.ResponseWriter, r *http.Request) {
 	png.Encode(w, dc.Image())
 }
 
+// appURL is the SPA address for an event: every query parameter the visitor
+// arrived with (embed=1, admin=…) plus _src=app, which vercel.json routes to
+// the app instead of back here.
+func appURL(slug string, q url.Values) string {
+	params := url.Values{}
+	for k, v := range q {
+		params[k] = append([]string(nil), v...)
+	}
+	params.Set("_src", "app")
+	return "https://ollae.app/events/" + url.PathEscape(slug) + "?" + params.Encode()
+}
+
 // isCrawlerUA returns true for known crawlers that execute JS and would follow
 // the location.replace redirect, losing the OG tags.
 func isCrawlerUA(ua string) bool {
@@ -286,11 +299,14 @@ func isCrawlerUA(ua string) bool {
 func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
+	// Reloading the guestbook inside the portfolio's frame lands here, so it
+	// must be framable too, on the same terms as the app.
+	if embeddable(slug, r.URL.Query()) {
+		AllowEmbedParents(w)
+	}
+
 	var event Event
-	err := h.DB.QueryRow(`
-		SELECT id, slug, title, location, event_date, created_at, emoji
-		FROM events WHERE slug = $1
-	`, slug).Scan(&event.ID, &event.Slug, &event.Title, &event.Location, &event.EventDate, &event.CreatedAt, &event.Emoji)
+	err := scanEvent(h.DB.QueryRow(`SELECT `+eventColumns+` FROM events WHERE slug = $1`, slug), &event)
 	if err != nil {
 		// Crawlers get a plain 404. Browsers are sent into the SPA, which
 		// renders its own "event not found" state; redirecting a crawler
@@ -300,19 +316,30 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		http.Redirect(w, r, fmt.Sprintf("https://ollae.app/events/%s?_src=app", slug), http.StatusFound)
+		http.Redirect(w, r, appURL(slug, r.URL.Query()), http.StatusFound)
 		return
+	}
+
+	noindex := slug == GuestbookSlug || event.IsDemo
+	if noindex {
+		w.Header().Set("X-Robots-Tag", "noindex")
 	}
 
 	title := escapeHTML(event.Title)
 	ogImage := fmt.Sprintf("https://ollae.app/og/%s?v=2", slug)
 	ogURL := fmt.Sprintf("https://ollae.app/events/%s", slug)
-	appURL := fmt.Sprintf("https://ollae.app/events/%s?_src=app", slug)
+	app := appURL(slug, r.URL.Query())
 	desc := "Tap to see who&#39;s coming &#8594;"
 
-	redirectScript := fmt.Sprintf(`<script>location.replace("%s")</script>`, appURL)
+	// json.Marshal escapes <, > and & as < etc., so the URL, which
+	// carries visitor-controlled query parameters, can't close the script.
+	appJS, _ := json.Marshal(app)
+	redirectScript := fmt.Sprintf(`<script>location.replace(%s)</script>`, appJS)
 	if isCrawlerUA(r.Header.Get("User-Agent")) {
 		redirectScript = ""
+	}
+	if noindex {
+		redirectScript = `<meta name="robots" content="noindex" />` + "\n  " + redirectScript
 	}
 
 	html := fmt.Sprintf(`<!DOCTYPE html>
@@ -340,7 +367,7 @@ func (h *EventHandlers) OGPreview(w http.ResponseWriter, r *http.Request) {
 <body style="margin:0;background:#0F172A;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:-apple-system,sans-serif;">
   <a href="%s" style="color:#F59E0B;font-size:18px;font-weight:700;text-decoration:none;">Tap to see who's coming →</a>
 </body>
-</html>`, title, title, desc, ogImage, ogImage, ogURL, title, desc, ogImage, redirectScript, appURL)
+</html>`, title, title, desc, ogImage, ogImage, ogURL, title, desc, ogImage, redirectScript, escapeHTML(app))
 
 	w.Header().Set("Content-Type", "text/html;charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store, no-transform")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -101,5 +102,35 @@ func TestCallAnthropicDoesNotRetryClientErrors(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Errorf("calls = %d, want 1 (no retry on 4xx)", got)
+	}
+}
+
+func TestSanitizeParsed(t *testing.T) {
+	long := strings.Repeat("x", 200)
+	blank := "  "
+	badDate, badTime := "next Saturday", "2pm"
+	got := sanitizeParsed(ParsedEvent{Title: long, Location: &blank, Date: &badDate, Time: &badTime, Emoji: "🏐🏐"})
+	if len([]rune(got.Title)) != maxTitleLen || got.Location != nil || got.Date != nil || got.Time != nil || got.Emoji != "🎉" {
+		t.Errorf("sanitizeParsed = %+v", got)
+	}
+	date, clock, loc := "2026-09-18", "12:30", "Alexander Library"
+	got = sanitizeParsed(ParsedEvent{Title: "Ollae Demo", Location: &loc, Date: &date, Time: &clock, Emoji: "📚"})
+	if got.Title != "Ollae Demo" || *got.Location != loc || *got.Date != date || *got.Time != clock || got.Emoji != "📚" {
+		t.Errorf("valid fields changed: %+v", got)
+	}
+}
+
+func TestLocalToday(t *testing.T) {
+	now := time.Date(2026, 9, 17, 2, 0, 0, 0, time.UTC) // 10pm Sep 16 in New York
+	for visitor, want := range map[string]string{
+		"2026-09-16": "2026-09-16", // behind UTC
+		"2026-09-18": "2026-09-18", // ahead of UTC (e.g. Auckland)
+		"2026-09-20": "2026-09-17", // not a real local date
+		"":           "2026-09-17",
+		"garbage":    "2026-09-17",
+	} {
+		if got := localToday(visitor, now); got != want {
+			t.Errorf("localToday(%q) = %s, want %s", visitor, got, want)
+		}
 	}
 }

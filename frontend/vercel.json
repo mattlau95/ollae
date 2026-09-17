@@ -26,6 +26,40 @@
     {
       "source": "/events/:slug",
       "headers": [{ "key": "Cache-Control", "value": "no-store, no-transform" }]
+    },
+    {
+      "source": "/((?!create$|events/wssrfd7v$).*)",
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" }]
+    },
+    {
+      "source": "/create",
+      "missing": [{ "type": "query", "key": "embed", "value": "1" }],
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" }]
+    },
+    {
+      "source": "/create",
+      "has": [{ "type": "query", "key": "embed", "value": "1" }],
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors https://www.matthewclau.com https://matthewclau.com http://localhost:4321" }]
+    },
+    {
+      "source": "/events/wssrfd7v",
+      "missing": [{ "type": "query", "key": "embed", "value": "1" }],
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" }]
+    },
+    {
+      "source": "/events/wssrfd7v",
+      "has": [{ "type": "query", "key": "admin" }],
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" }]
+    },
+    {
+      "source": "/events/wssrfd7v",
+      "has": [{ "type": "query", "key": "embed", "value": "1" }],
+      "missing": [{ "type": "query", "key": "admin" }],
+      "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors https://www.matthewclau.com https://matthewclau.com http://localhost:4321" }]
+    },
+    {
+      "source": "/events/wssrfd7v",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
     }
   ]
 }

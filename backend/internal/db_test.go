@@ -14,6 +14,7 @@ import (
 // postgres://user@localhost:5432/ollae_test?sslmode=disable
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
+	ogWarmBase = "" // never call production from tests
 	base := os.Getenv("TEST_DATABASE_URL")
 	if base == "" {
 		t.Skip("TEST_DATABASE_URL not set")

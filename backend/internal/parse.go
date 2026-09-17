@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 type ParsedEvent struct {
@@ -103,13 +104,29 @@ func (h *EventHandlers) ParseEvent(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		Input string `json:"input"`
+		Today string `json:"today"` // the visitor's local date, YYYY-MM-DD
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Input == "" {
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Input) == "" {
 		JSONError(w, http.StatusBadRequest, "input is required")
 		return
 	}
+	if utf8.RuneCountInString(body.Input) > maxParseInput {
+		JSONErrorCode(w, http.StatusBadRequest, "invalid",
+			fmt.Sprintf("Descriptions can be up to %d characters.", maxParseInput))
+		return
+	}
 
-	today := time.Now().Format("2006-01-02")
+	if err := takeClaudeCall(r.Context(), h.DB, h.ClaudeDailyCap); err != nil {
+		if err == errClaudeCapReached {
+			JSONErrorCode(w, http.StatusServiceUnavailable, "daily_cap",
+				"Our AI helper is done for today. Fill in the details yourself below.")
+		} else {
+			JSONError(w, http.StatusServiceUnavailable, "AI parsing is busy, try again in a moment")
+		}
+		return
+	}
+
+	today := localToday(body.Today, time.Now())
 	systemPrompt := fmt.Sprintf(`You are a parser that extracts event details from natural language. Today's date is %s.
 
 Return ONLY a JSON object with these exact keys:
@@ -172,5 +189,40 @@ No explanation. No markdown. JSON only.`, today)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(parsed)
+	json.NewEncoder(w).Encode(sanitizeParsed(parsed))
+}
+
+// localToday returns the visitor's date when it's a real date within a day
+// of the server's UTC date (every timezone is), otherwise the server's.
+func localToday(visitor string, now time.Time) string {
+	server := now.UTC()
+	if d, err := time.Parse("2006-01-02", visitor); err == nil {
+		if diff := d.Sub(server.Truncate(24 * time.Hour)); diff >= -24*time.Hour && diff <= 24*time.Hour {
+			return visitor
+		}
+	}
+	return server.Format("2006-01-02")
+}
+
+// sanitizeParsed caps what Claude returned to what the form accepts. The
+// visitor reviews every field before creating, and create validates again.
+func sanitizeParsed(p ParsedEvent) ParsedEvent {
+	p.Title = truncateRunes(p.Title, maxTitleLen)
+	if p.Location != nil {
+		loc := truncateRunes(*p.Location, maxLocationLen)
+		p.Location = &loc
+		if loc == "" {
+			p.Location = nil
+		}
+	}
+	if p.Date != nil && !validDate(*p.Date) {
+		p.Date = nil
+	}
+	if p.Time != nil && !validClock(*p.Time) {
+		p.Time = nil
+	}
+	if !validEmoji(p.Emoji) {
+		p.Emoji = "🎉"
+	}
+	return p
 }

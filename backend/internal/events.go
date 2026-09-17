@@ -1,10 +1,11 @@
 package internal
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -24,7 +25,21 @@ type Event struct {
 	EventDate  *time.Time `json:"event_date"`
 	CreatedAt  time.Time  `json:"created_at"`
 	Emoji      string     `json:"emoji"`
+	IsDemo     bool       `json:"is_demo"`
+	AppendOnly bool       `json:"append_only"`
 	AdminToken string     `json:"admin_token,omitempty"` // only returned on create
+}
+
+// ogWarmBase is where CreateEvent pre-warms the OG image; tests clear it.
+var ogWarmBase = "https://ollae.app/og/"
+
+// eventColumns and scanEvent read an Event the same way in every query.
+const eventColumns = `id, slug, title, COALESCE(location, ''), event_date, created_at, emoji, is_demo, append_only`
+
+func scanEvent(row interface{ Scan(...any) error }, e *Event, extra ...any) error {
+	return row.Scan(append([]any{
+		&e.ID, &e.Slug, &e.Title, &e.Location, &e.EventDate, &e.CreatedAt, &e.Emoji, &e.IsDemo, &e.AppendOnly,
+	}, extra...)...)
 }
 
 type Response struct {
@@ -73,14 +88,15 @@ func publicResponses(db *sql.DB, eventID string) ([]PublicResponse, error) {
 }
 
 type EventHandlers struct {
-	DB           *sql.DB
-	AnthropicKey string
-	AdminSecret  string
-	FBAppToken   string
+	DB             *sql.DB
+	AnthropicKey   string
+	AdminSecret    string
+	FBAppToken     string
+	ClaudeDailyCap int
 }
 
-func pickEmoji(ctx context.Context, apiKey, title string) string {
-	if apiKey == "" {
+func pickEmoji(ctx context.Context, h *EventHandlers, title string) string {
+	if h.AnthropicKey == "" || takeClaudeCall(ctx, h.DB, h.ClaudeDailyCap) != nil {
 		return ""
 	}
 	payload, _ := json.Marshal(map[string]any{
@@ -89,19 +105,13 @@ func pickEmoji(ctx context.Context, apiKey, title string) string {
 		"system":     "Reply with a single emoji that best represents the event. Nothing else — one emoji only.",
 		"messages":   []map[string]string{{"role": "user", "content": title}},
 	})
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewReader(payload))
-	if err != nil {
+	// The emoji is a nicety; don't hold up event creation for long.
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	status, raw, err := callAnthropic(ctx, h.AnthropicKey, payload)
+	if err != nil || status != http.StatusOK {
 		return ""
 	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-	resp, err := anthropicClient.Do(req)
-	if err != nil {
-		return ""
-	}
-	defer resp.Body.Close()
-	raw, _ := io.ReadAll(resp.Body)
 	var apiResp struct {
 		Content []struct {
 			Text string `json:"text"`
@@ -110,7 +120,39 @@ func pickEmoji(ctx context.Context, apiKey, title string) string {
 	if err := json.Unmarshal(raw, &apiResp); err != nil || len(apiResp.Content) == 0 {
 		return ""
 	}
-	return strings.TrimSpace(apiResp.Content[0].Text)
+	if emoji := strings.TrimSpace(apiResp.Content[0].Text); validEmoji(emoji) {
+		return emoji
+	}
+	return ""
+}
+
+// eventFields validates the fields shared by create and update.
+func eventFields(title, location string, eventDate *string) (string, string, error) {
+	title, err := cleanField(title, maxTitleLen, "Event names")
+	if err != nil {
+		return "", "", err
+	}
+	if title == "" {
+		return "", "", validationError{"Give your event a name."}
+	}
+	location, err = cleanField(location, maxLocationLen, "Locations")
+	if err != nil {
+		return "", "", err
+	}
+	if eventDate != nil && !validEventDate(*eventDate) {
+		return "", "", validationError{"That date or time doesn't look right."}
+	}
+	return title, location, nil
+}
+
+// writeValidation sends a validationError's message, or a generic 400.
+func writeValidation(w http.ResponseWriter, err error) {
+	var ve validationError
+	if errors.As(err, &ve) {
+		JSONErrorCode(w, http.StatusBadRequest, "invalid", ve.msg)
+		return
+	}
+	JSONError(w, http.StatusBadRequest, "invalid request body")
 }
 
 func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
@@ -119,19 +161,21 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		Location  string  `json:"location"`
 		EventDate *string `json:"event_date"`
 		Emoji     string  `json:"emoji"`
+		Demo      bool    `json:"demo"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.Title == "" {
-		JSONError(w, http.StatusBadRequest, "title is required")
+	title, location, err := eventFields(body.Title, body.Location, body.EventDate)
+	if err != nil {
+		writeValidation(w, err)
 		return
 	}
 
 	emoji := body.Emoji
-	if emoji == "" {
-		emoji = pickEmoji(r.Context(), h.AnthropicKey, body.Title)
+	if !validEmoji(emoji) {
+		emoji = pickEmoji(r.Context(), h, title)
 	}
 
 	slug, err := gonanoid.Generate("abcdefghijklmnopqrstuvwxyz0123456789", 8)
@@ -146,32 +190,35 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var event Event
-	err = h.DB.QueryRow(`
-		INSERT INTO events (slug, title, location, event_date, emoji, admin_token)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, slug, title, location, event_date, created_at, emoji, admin_token
-	`, slug, body.Title, body.Location, body.EventDate, emoji, adminToken).Scan(
-		&event.ID, &event.Slug, &event.Title, &event.Location,
-		&event.EventDate, &event.CreatedAt, &event.Emoji, &event.AdminToken,
-	)
+	err = scanEvent(h.DB.QueryRow(`
+		INSERT INTO events (slug, title, location, event_date, emoji, admin_token, is_demo)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING `+eventColumns+`, admin_token
+	`, slug, title, location, body.EventDate, emoji, adminToken, body.Demo), &event, &event.AdminToken)
 	if err != nil {
+		log.Printf("create event: %v", err)
 		JSONError(w, http.StatusInternalServerError, "failed to create event")
 		return
 	}
 
 	// Pre-warm the OG image so the CDN has it cached before Facebook's scraper
 	// hits the URL — FB's first scrape wins and is cached for ~30 days.
-	warmCtx, warmCancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer warmCancel()
-	if warmReq, err := http.NewRequestWithContext(warmCtx, http.MethodGet, "https://ollae.app/og/"+slug+"?v=2", nil); err == nil {
-		if warmResp, err := http.DefaultClient.Do(warmReq); err == nil {
-			warmResp.Body.Close()
-		} else {
-			log.Printf("OG warm failed %s: %v", slug, err)
+	if ogWarmBase != "" {
+		warmCtx, warmCancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer warmCancel()
+		if warmReq, err := http.NewRequestWithContext(warmCtx, http.MethodGet, ogWarmBase+slug+"?v=2", nil); err == nil {
+			if warmResp, err := http.DefaultClient.Do(warmReq); err == nil {
+				warmResp.Body.Close()
+			} else {
+				log.Printf("OG warm failed %s: %v", slug, err)
+			}
 		}
 	}
 
-	go h.pingFBScraper(slug)
+	// Demo events live for 3 days and aren't shared into group chats.
+	if !event.IsDemo {
+		go h.pingFBScraper(slug)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -229,13 +276,7 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 
 	var event Event
-	err := h.DB.QueryRow(`
-		SELECT id, slug, title, location, event_date, created_at, emoji
-		FROM events WHERE slug = $1
-	`, slug).Scan(
-		&event.ID, &event.Slug, &event.Title, &event.Location,
-		&event.EventDate, &event.CreatedAt, &event.Emoji,
-	)
+	err := scanEvent(h.DB.QueryRow(`SELECT `+eventColumns+` FROM events WHERE slug = $1`, slug), &event)
 	if err == sql.ErrNoRows {
 		JSONError(w, http.StatusNotFound, "event not found")
 		return
@@ -276,21 +317,19 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.Title == "" {
-		JSONError(w, http.StatusBadRequest, "title is required")
+	title, location, err := eventFields(body.Title, body.Location, body.EventDate)
+	if err != nil {
+		writeValidation(w, err)
 		return
 	}
 
 	var event Event
-	err := h.DB.QueryRow(`
+	err = scanEvent(h.DB.QueryRow(`
 		UPDATE events
 		SET title = $1, location = $2, event_date = $3
 		WHERE slug = $4 AND admin_token = $5
-		RETURNING id, slug, title, location, event_date, created_at, emoji
-	`, body.Title, body.Location, body.EventDate, slug, adminToken).Scan(
-		&event.ID, &event.Slug, &event.Title, &event.Location,
-		&event.EventDate, &event.CreatedAt, &event.Emoji,
-	)
+		RETURNING `+eventColumns+`
+	`, title, location, body.EventDate, slug, adminToken), &event)
 	if err == sql.ErrNoRows {
 		JSONError(w, http.StatusForbidden, "event not found or invalid token")
 		return
@@ -300,7 +339,9 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.pingFBScraper(slug)
+	if !event.IsDemo {
+		go h.pingFBScraper(slug)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(event)
@@ -319,8 +360,13 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.Name == "" {
-		JSONError(w, http.StatusBadRequest, "name is required")
+	name, err := cleanField(body.Name, maxNameLen, "Names")
+	if err != nil {
+		writeValidation(w, err)
+		return
+	}
+	if name == "" {
+		JSONErrorCode(w, http.StatusBadRequest, "invalid", "Please enter your name.")
 		return
 	}
 	validStatuses := map[string]bool{"in": true, "out": true, "remind_me": true}
@@ -328,12 +374,18 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusBadRequest, "status must be in, out, or remind_me")
 		return
 	}
-	if body.Status == "remind_me" && (body.NotifyVia == nil || *body.NotifyVia == "") {
-		JSONError(w, http.StatusBadRequest, "notify_via is required when status is remind_me")
-		return
+	if body.Status == "remind_me" {
+		if body.NotifyVia == nil || !validEmail(strings.TrimSpace(*body.NotifyVia)) {
+			JSONErrorCode(w, http.StatusBadRequest, "invalid", "That email address doesn't look right.")
+			return
+		}
+		email := strings.TrimSpace(*body.NotifyVia)
+		body.NotifyVia = &email
+	} else {
+		body.NotifyVia = nil
 	}
-	if body.Guests < 0 || body.Guests > 99 {
-		JSONError(w, http.StatusBadRequest, "guests must be between 0 and 99")
+	if body.Guests < 0 || body.Guests > maxGuests {
+		JSONErrorCode(w, http.StatusBadRequest, "invalid", fmt.Sprintf("You can bring up to %d guests.", maxGuests))
 		return
 	}
 	// guests only makes sense for "in" RSVPs
@@ -341,9 +393,9 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		body.Guests = 0
 	}
 
-	// Look up the event by slug
 	var eventID string
-	err := h.DB.QueryRow(`SELECT id FROM events WHERE slug = $1`, slug).Scan(&eventID)
+	var isDemo, appendOnly bool
+	err = h.DB.QueryRow(`SELECT id, is_demo, append_only FROM events WHERE slug = $1`, slug).Scan(&eventID, &isDemo, &appendOnly)
 	if err == sql.ErrNoRows {
 		JSONError(w, http.StatusNotFound, "event not found")
 		return
@@ -352,17 +404,32 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusInternalServerError, "failed to fetch event")
 		return
 	}
+	if isDemo && body.Status == "remind_me" {
+		JSONErrorCode(w, http.StatusBadRequest, "invalid", "Reminders are turned off for demo events.")
+		return
+	}
 
-	// Upsert — insert or update if name already exists for this event
-	_, err = h.DB.Exec(`
+	// On an append-only event a name already on the list is kept as it is,
+	// so nobody can change someone else's answer. Otherwise resubmitting a
+	// name updates that RSVP.
+	onConflict := `DO UPDATE SET status = EXCLUDED.status, guests = EXCLUDED.guests, notify_via = EXCLUDED.notify_via`
+	if appendOnly {
+		onConflict = `DO NOTHING`
+	}
+	result, err := h.DB.Exec(`
 		INSERT INTO responses (event_id, name, status, guests, notify_via)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (event_id, lower(name))
-		DO UPDATE SET status = EXCLUDED.status, guests = EXCLUDED.guests, notify_via = EXCLUDED.notify_via
-	`, eventID, body.Name, body.Status, body.Guests, body.NotifyVia)
+		ON CONFLICT (event_id, lower(name)) `+onConflict,
+		eventID, name, body.Status, body.Guests, body.NotifyVia)
 	if err != nil {
 		log.Printf("upsert error: %v", err)
 		JSONError(w, http.StatusInternalServerError, "failed to save response")
+		return
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		first := strings.Fields(name)[0]
+		JSONErrorCode(w, http.StatusConflict, "name_taken", fmt.Sprintf(
+			"Someone named %s is already on the list. Add a last initial, like “%s K.”", name, first))
 		return
 	}
 
@@ -373,6 +440,45 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(responses)
+}
+
+// DeleteResponse lets the organizer remove one RSVP with the edit link's
+// token, and returns the updated list.
+func (h *EventHandlers) DeleteResponse(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	id := chi.URLParam(r, "id")
+	adminToken := r.URL.Query().Get("admin")
+	if adminToken == "" {
+		JSONError(w, http.StatusUnauthorized, "admin token required")
+		return
+	}
+
+	var eventID string
+	err := h.DB.QueryRow(`
+		SELECT id FROM events WHERE slug = $1 AND admin_token = $2
+	`, slug, adminToken).Scan(&eventID)
+	if err == sql.ErrNoRows {
+		JSONError(w, http.StatusForbidden, "event not found or invalid token")
+		return
+	}
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to fetch event")
+		return
+	}
+
+	// id is compared as text so a malformed id is simply not found.
+	if _, err := h.DB.Exec(`DELETE FROM responses WHERE id::text = $1 AND event_id = $2`, id, eventID); err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to delete response")
+		return
+	}
+
+	responses, err := publicResponses(h.DB, eventID)
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to fetch responses")
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(responses)
 }

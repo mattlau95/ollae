@@ -9,7 +9,11 @@ CREATE TABLE IF NOT EXISTS events (
   event_date  TIMESTAMPTZ,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   emoji       TEXT NOT NULL DEFAULT '',
-  admin_token TEXT NOT NULL DEFAULT ''
+  admin_token TEXT NOT NULL DEFAULT '',
+  -- Created from the portfolio embed; deleted 3 days after creation.
+  is_demo     BOOLEAN NOT NULL DEFAULT false,
+  -- A name already on the list can't be resubmitted to change its answer.
+  append_only BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS responses (
@@ -31,4 +35,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS responses_event_id_name_idx
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+
+-- Claude API calls per UTC day, checked against CLAUDE_DAILY_CAP.
+CREATE TABLE IF NOT EXISTS claude_usage (
+  day   DATE PRIMARY KEY,
+  calls INT NOT NULL DEFAULT 0
 );

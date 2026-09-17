@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,19 +37,6 @@ type noBodyWriter struct {
 
 func (noBodyWriter) Write([]byte) (int, error) { return 0, nil }
 
-// clientIP keys rate limits on Fly's proxy-set header rather than
-// X-Forwarded-For, which a client can spoof.
-func clientIP(r *http.Request) (string, error) {
-	if ip := r.Header.Get("Fly-Client-IP"); ip != "" {
-		return ip, nil
-	}
-	return httprate.KeyByIP(r)
-}
-
-func rateLimited(w http.ResponseWriter, r *http.Request) {
-	internal.JSONError(w, http.StatusTooManyRequests, "too many requests, try again in a minute")
-}
-
 func main() {
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
@@ -62,15 +50,21 @@ func main() {
 
 	resendKey := os.Getenv("RESEND_API_KEY")
 	cronToken := os.Getenv("CRON_TOKEN")
+	claudeCap := internal.DefaultClaudeDailyCap
+	if v, err := strconv.Atoi(os.Getenv("CLAUDE_DAILY_CAP")); err == nil {
+		claudeCap = v
+	}
 	h := &internal.EventHandlers{
-		DB:           db,
-		AnthropicKey: os.Getenv("ANTHROPIC_API_KEY"),
-		AdminSecret:  os.Getenv("ADMIN_SECRET"),
-		FBAppToken:   os.Getenv("FB_APP_TOKEN"),
+		DB:             db,
+		AnthropicKey:   os.Getenv("ANTHROPIC_API_KEY"),
+		AdminSecret:    os.Getenv("ADMIN_SECRET"),
+		FBAppToken:     os.Getenv("FB_APP_TOKEN"),
+		ClaudeDailyCap: claudeCap,
 	}
 
-	// Best-effort background loop (only fires while the machine is alive).
+	// Best-effort background loops (only fire while the machine is alive).
 	internal.StartReminderLoop(db, resendKey)
+	internal.StartCleanupLoop(db)
 
 	allowedOrigins := []string{"http://localhost:5173", "http://localhost:5174"}
 	if frontendURL := os.Getenv("FRONTEND_URL"); frontendURL != "" {
@@ -84,9 +78,10 @@ func main() {
 	// then discard the response body — required for Facebook's scraper linter
 	// which sends HEAD to validate the page URL and og:image URL.
 	r.Use(headToGet)
+	r.Use(internal.NoFraming)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: allowedOrigins,
-		AllowedMethods: []string{"GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedMethods: []string{"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Content-Type", "Authorization"},
 	}))
 
@@ -95,20 +90,27 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	// Claude parsing is the only endpoint that costs money per call: cap it
-	// per client and in total so a traffic spike can't run up the bill.
-	parseByIP := httprate.Limit(10, time.Minute,
-		httprate.WithKeyFuncs(clientIP),
-		httprate.WithLimitHandler(rateLimited))
+	// Per-client limits on everything a visitor can write. Parsing also has a
+	// global per-minute limit and a daily cap on Claude calls (in the
+	// handler), since it's the one endpoint that costs money per call.
+	// Limits are in memory, so each Fly machine counts separately.
+	const slowDown = "You're going a little fast. Try again in a minute."
+	const later = "That's a lot for one hour. Try again a little later."
 	parseGlobal := httprate.Limit(120, time.Minute,
 		httprate.WithKeyFuncs(func(*http.Request) (string, error) { return "global", nil }),
-		httprate.WithLimitHandler(rateLimited))
-	r.With(parseGlobal, parseByIP).Post("/parse-event", h.ParseEvent)
-	r.Post("/events", h.CreateEvent)
+		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+			internal.JSONErrorCode(w, http.StatusTooManyRequests, "rate_limited", slowDown)
+		}))
+	r.With(parseGlobal, internal.PerIP(5, time.Minute, slowDown), internal.PerIP(30, time.Hour, later)).
+		Post("/parse-event", h.ParseEvent)
+	r.With(internal.PerIP(5, time.Minute, slowDown), internal.PerIP(20, time.Hour, later)).
+		Post("/events", h.CreateEvent)
 	r.Get("/events/{slug}", h.GetEvent)
 	r.Patch("/events/{slug}", h.UpdateEvent)
 
-	r.Post("/events/{slug}/rsvp", h.SubmitRSVP)
+	r.With(internal.PerIP(10, time.Minute, slowDown), internal.PerIP(60, time.Hour, later)).
+		Post("/events/{slug}/rsvp", h.SubmitRSVP)
+	r.Delete("/events/{slug}/responses/{id}", h.DeleteResponse)
 
 	r.Get("/og/{slug}", h.OGImage)
 	r.Get("/og-preview/{slug}", h.OGPreview)
@@ -118,6 +120,7 @@ func main() {
 	r.Route("/admin", func(r chi.Router) {
 		r.Get("/events", h.AdminGetEvents)
 		r.Patch("/events/{slug}", h.AdminUpdateEvent)
+		r.Put("/events/{slug}/append-only", h.AdminSetAppendOnly)
 		r.Delete("/events/{slug}", h.AdminDeleteEvent)
 		r.Post("/events/{slug}/rescrape", h.RescrapeEvent)
 		r.Delete("/responses/{id}", h.AdminDeleteResponse)
@@ -142,9 +145,8 @@ func main() {
 			internal.JSONError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		deleted, emailsCleared := internal.RunCleanup(db)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]int{"deleted": deleted, "emails_cleared": emailsCleared})
+		json.NewEncoder(w).Encode(internal.RunCleanup(db))
 	})
 
 	log.Println("Server starting on :8080")

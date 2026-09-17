@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -21,12 +23,12 @@ func TestRunCleanupClearsEmailsOnlyAfterEvent(t *testing.T) {
 		insertRemindMe(t, db, insertEvent(t, db, c.slug, c.eventDate), c.slug)
 	}
 
-	deleted, cleared := RunCleanup(db)
-	if deleted != 0 {
-		t.Errorf("deleted %d events, want 0 (none past retention)", deleted)
+	res := RunCleanup(db)
+	if res.EventsDeleted != 0 {
+		t.Errorf("deleted %d events, want 0 (none past retention)", res.EventsDeleted)
 	}
-	if cleared != 1 {
-		t.Errorf("cleared %d emails, want 1", cleared)
+	if res.EmailsCleared != 1 {
+		t.Errorf("cleared %d emails, want 1", res.EmailsCleared)
 	}
 
 	for _, c := range cases {
@@ -50,9 +52,9 @@ func TestRunCleanupKeepsEventsWithinRetention(t *testing.T) {
 	insertEvent(t, db, "undated", time.Time{})
 	db.Exec(`UPDATE events SET event_date = NULL WHERE slug = 'undated'`)
 
-	deleted, _ := RunCleanup(db) // default retention: 2 months
-	if deleted != 1 {
-		t.Errorf("deleted %d events, want 1", deleted)
+	res := RunCleanup(db) // default retention: 2 months
+	if res.EventsDeleted != 1 {
+		t.Errorf("deleted %d events, want 1", res.EventsDeleted)
 	}
 	var left []string
 	rows, _ := db.Query(`SELECT slug FROM events ORDER BY slug`)
@@ -64,5 +66,44 @@ func TestRunCleanupKeepsEventsWithinRetention(t *testing.T) {
 	rows.Close()
 	if len(left) != 2 || left[0] != "recent" || left[1] != "undated" {
 		t.Errorf("events left = %v, want [recent undated]", left)
+	}
+}
+
+func TestRunCleanupDeletesDemoEventsAfterThreeDays(t *testing.T) {
+	db := testDB(t)
+	future := time.Now().Add(7 * 24 * time.Hour)
+	for _, e := range []struct {
+		slug    string
+		demo    bool
+		created time.Duration // ago
+	}{
+		{"olddemo", true, 73 * time.Hour},
+		{"oldreal", false, 73 * time.Hour},
+		{"newdemo", true, 71 * time.Hour},
+	} {
+		insertEvent(t, db, e.slug, future)
+		if _, err := db.Exec(`UPDATE events SET is_demo = $1, created_at = now() - $2::interval WHERE slug = $3`,
+			e.demo, fmt.Sprintf("%d seconds", int(e.created.Seconds())), e.slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	res := RunCleanup(db)
+	if res.DemoEventsDeleted != 1 {
+		t.Errorf("deleted %d demo events, want 1", res.DemoEventsDeleted)
+	}
+	var left []string
+	rows, err := db.Query(`SELECT slug FROM events ORDER BY slug`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s string
+		rows.Scan(&s)
+		left = append(left, s)
+	}
+	if strings.Join(left, ",") != "newdemo,oldreal" {
+		t.Errorf("events left = %v, want [newdemo oldreal]", left)
 	}
 }

@@ -9,6 +9,7 @@ require (
 	github.com/go-chi/httprate v0.16.0
 	github.com/lib/pq v1.12.3
 	github.com/matoous/go-nanoid/v2 v2.1.0
+	github.com/rivo/uniseg v0.4.7
 	golang.org/x/image v0.41.0
 )
 

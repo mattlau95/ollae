@@ -78,11 +78,16 @@ Browser → ollae.app (Vercel) → ollae-backend.fly.dev (Fly.io) → Postgres (
 - `POST  /events`              — create event, returns slug + admin token
 - `GET   /events/:slug`        — fetch event + all responses
 - `PATCH /events/:slug`        — update event (requires `?admin=<token>`)
-- `POST  /events/:slug/rsvp`   — upsert RSVP (case-insensitive name dedup)
+- `POST  /events/:slug/rsvp`   — upsert RSVP (case-insensitive name dedup; append-only events reject a name already on the list)
+- `DELETE /events/:slug/responses/:id` — organizer removes one RSVP (requires `?admin=<token>`)
 - `GET   /og/:slug`            — 1200×630 preview image, rendered server-side
 - `GET   /og-preview/:slug`    — crawler-facing HTML with OG tags (see `vercel.json`)
 - `GET   /cron/remind`         — send due reminder emails (token-protected)
 - `/admin/*`                   — dashboard endpoints, bearer-token auth
+
+Writes are rate-limited per client (keyed on `Fly-Client-IP`), and Claude calls are capped per day in Postgres (`CLAUDE_DAILY_CAP`, default 300).
+
+**Portfolio embeds.** Two screens can be framed by the portfolio case study, with `?embed=1`: the guestbook event (`/events/wssrfd7v?_src=app&embed=1`) and `/create?embed=1`. Only those two, and only by the portfolio's origins, via CSP `frame-ancestors` in `vercel.json` and `internal/framing.go`; everything else sends `frame-ancestors 'none'`. In embed mode the page reports its height to the parent with `postMessage`, links leave in a new tab, and events created from the frame are demos, deleted after 3 days. See `frontend/src/embed.ts` for the message protocol.
 
 **Share-link routing.** A tap on `ollae.app/events/:slug` from a chat app is first served by `/og-preview/:slug`, so link-preview crawlers see static OG tags without running JavaScript. Real browsers are bounced into the SPA with `?_src=app`, which `vercel.json` rewrites to `index.html`.
 
@@ -107,13 +112,16 @@ Browser → ollae.app (Vercel) → ollae-backend.fly.dev (Fly.io) → Postgres (
 **Backend:**
 ```bash
 cd backend
-go test ./...          # unit tests, no database needed
+go test ./...          # unit tests; database tests are skipped
+TEST_DATABASE_URL=postgres://user@localhost:5432/ollae_test?sslmode=disable go test ./...
+                       # also runs the Postgres tests, each in a throwaway schema
 go run ./cmd/main.go
 # Runs on :8080
 # Requires DATABASE_URL, e.g. postgres://user:pass@localhost:5432/ollae?sslmode=disable
 # Optional: ANTHROPIC_API_KEY (natural-language parsing; without it the form
 #   falls back to manual entry), ADMIN_SECRET (/admin), RESEND_API_KEY + CRON_TOKEN
-#   (reminder emails), FB_APP_TOKEN (preview rescrape), FRONTEND_URL (extra CORS origin)
+#   (reminder emails), FB_APP_TOKEN (preview rescrape), FRONTEND_URL (extra CORS origin),
+#   CLAUDE_DAILY_CAP (Claude calls per UTC day, default 300)
 ```
 
 **Frontend:**
