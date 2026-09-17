@@ -43,6 +43,11 @@ function formatDate(dateStr: string | null) {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Shows each word's first letter and hides the rest: "b••••••••••".
+function maskTerm(term: string) {
+  return term.split(' ').map(w => w.slice(0, 1) + '•'.repeat(Math.max(w.length - 1, 0))).join(' ')
+}
+
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime()
   const m = Math.floor(diff / 60000)
@@ -73,6 +78,7 @@ export default function AdminPage() {
   const [blockedTerms, setBlockedTerms] = useState<string[] | null>(null)
   const [termInput, setTermInput] = useState('')
   const [termSaving, setTermSaving] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
 
   useEffect(() => {
     if (!key) return
@@ -161,6 +167,7 @@ export default function AdminPage() {
   }
 
   async function removeBlockedTerm(term: string) {
+    if (!window.confirm(`Remove "${maskTerm(term)}" from blocked words?`)) return
     await changeBlockedTerm('/admin/blocked-terms/remove', term)
   }
 
@@ -385,7 +392,21 @@ export default function AdminPage() {
       {/* Blocked words */}
       <section aria-labelledby="blocked-heading" className="mb-6 bg-gray-800 rounded-lg px-4 py-3 flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="blocked-heading" className="text-sm font-semibold">Blocked words</h2>
+          <div className="flex items-baseline gap-3">
+            <h2 id="blocked-heading" className="text-sm font-semibold">
+              Blocked words{blockedTerms ? ` · ${blockedTerms.length}` : ''}
+            </h2>
+            {!!blockedTerms?.length && (
+              <button
+                onClick={() => setShowTerms(v => !v)}
+                aria-expanded={showTerms}
+                aria-controls="blocked-list"
+                className="text-xs text-amber-400 hover:text-amber-300 transition-colors"
+              >
+                {showTerms ? 'Hide' : 'Show'}
+              </button>
+            )}
+          </div>
           <span className="text-xs text-gray-400">
             Rejected in names, titles and locations, as whole words. Empty means nothing is blocked.
           </span>
@@ -413,14 +434,15 @@ export default function AdminPage() {
           <p className="text-xs text-gray-400">Loading…</p>
         ) : blockedTerms.length === 0 ? (
           <p className="text-xs text-gray-400">No blocked words.</p>
-        ) : (
-          <ul className="flex flex-wrap gap-2">
-            {blockedTerms.map(term => (
-              <li key={term} className="inline-flex items-center gap-1 bg-gray-700 rounded pl-2 text-sm">
-                {term}
+        ) : showTerms && (
+          <ul id="blocked-list" className="flex flex-wrap gap-2">
+            {blockedTerms.map((term, i) => (
+              <li key={term} className="inline-flex items-center gap-1 bg-gray-700 rounded pl-2 text-sm font-mono">
+                {/* Masked so the list is safe on a screen share. */}
+                <span aria-label={`Blocked word ${i + 1}, ${term.length} letters`}>{maskTerm(term)}</span>
                 <button
                   onClick={() => removeBlockedTerm(term)}
-                  aria-label={`Unblock ${term}`}
+                  aria-label={`Remove blocked word ${i + 1}`}
                   title="Remove"
                   className="text-gray-400 hover:text-red-400 transition-colors w-7 h-7 inline-flex items-center justify-center"
                 >
