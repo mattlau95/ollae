@@ -1786,3 +1786,80 @@ First implementation used `confetti.shapeFromText()` to rain the event's own emo
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend · canvas-confetti*
 *Tools: Claude Code · Linear*
+
+## Session 23 — Sep 16, 2026
+
+---
+
+### What We Built
+
+Closed out the leaked-credential blocker from the Session 22 audit (`docs/session-22-launch-polish.md`): investigated the exposure, rotated the production database password with no downtime, and verified the live backend reconnected.
+
+---
+
+### Issues Closed
+
+**MAT-705 — Rotate the Postgres password**
+
+---
+
+### What Changed
+
+**What actually leaked**
+
+The fallback removed in `d3500a4` was `postgres://postgres:…@localhost:5432/showup` — a local dev URL, in a public repo. Before rotating anything, the leaked password was compared against every production password by SHA-256 hash, computed on each machine so no secret was ever printed. It matched none of them: not the backend's `DATABASE_URL` (role `ollae_backend`), nor `showup-db`'s `SU_PASSWORD`, `OPERATOR_PASSWORD` or `REPL_PASSWORD`. `showup-db` also has only a private 6PN address, so it isn't reachable from the internet at all. The leak never gave access to production. The rotation was hygiene, not incident response.
+
+**Connection history**
+
+`log_connections` is off, so no historical trail exists. Fly's logs only carry an hourly "connection count is 2". Live `pg_stat_activity` showed Fly internals (`flypgadmin`, `repmgr`, `postgres`) plus the one `ollae_backend` session, and nothing unfamiliar.
+
+**Rotation, ordered to avoid downtime**
+
+1. New 48-char hex password → `fly secrets import --stage` for `DATABASE_URL` (no restart)
+2. `ALTER ROLE ollae_backend WITH PASSWORD …` on `showup-db`, then a fresh login with the new password to prove it. Existing connections survive a password change, so the running app kept serving.
+3. `fly secrets deploy -a ollae-backend` → both machines to v28
+
+**Verification**
+
+`Database connected` in the startup log. Since `NewDB` pings and `main` exits on error, that line proves the credential works. `/health` 200, `/settings/retention` 200, `/events/<nonexistent>` 404 "event not found" (a real query, no 500). No errors after the restart, and a new `ollae_backend` session in `pg_stat_activity` opened at the restart timestamp.
+
+---
+
+### Product Decisions Made
+
+| Decision | Rationale |
+|---|---|
+| Check before rotating | The first question was whether the leak was a production credential at all. Hash comparison answered it without exposing any secret. |
+| Stage → alter role → deploy | Changing the role first would break new connections until the restart; staging first shrinks that window to the restart itself. |
+| No git history rewrite | The value is already assumed compromised; a force-push doesn't undo that and breaks every existing clone. |
+| Rotated anyway | Cheap and zero-downtime once staged, and it closes the ticket without relying on the hash check alone. |
+
+---
+
+### Things That Tripped Us Up
+
+**Windows line ending in the generated password**
+
+`openssl rand -hex 24` under Git Bash produced 49 characters, not 48. The extra one was a trailing `\r`, which would have ended up inside `DATABASE_URL`. It was caught by a length check before the role was altered; the file was stripped to hex only and the secret re-staged.
+
+**Postgres-flex role names**
+
+On `flyio/postgres-flex`, `SU_PASSWORD` belongs to `flypgadmin`, not `postgres`; `OPERATOR_PASSWORD` is the `postgres` user's. The first query attempt used the wrong one and logged four `password authentication failed` lines — all self-inflicted, worth knowing if they show up in a later log review.
+
+**Shell quoting through `fly ssh console -C` on Windows**
+
+Nested quotes got mangled, and the first hash that came back was the hash of `"1"`. Base64-encoding the remote script (`echo <b64> | base64 -d | sh`) sidestepped quoting entirely.
+
+---
+
+### Still Open
+
+- Change the leaked password anywhere it's reused locally
+- `api-black-silence-6888` (suspended) has its own `DATABASE_URL` — not checked
+- Every login role is a superuser, including `ollae_backend`; `showup_backend` role is unused
+- Turn on `log_connections`
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Fly Postgres (postgres-flex 17.2) · Vercel*
+*Tools: Claude Code · flyctl · Linear*
