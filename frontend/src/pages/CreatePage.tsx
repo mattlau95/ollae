@@ -276,7 +276,7 @@ export default function CreatePage() {
             <label htmlFor="nl-input" className="sr-only">Describe your event</label>
             <textarea
               id="nl-input"
-              placeholder={isEmbed ? 'Ollae Demo @ Alexander Library at 12:30pm' : 'e.g. Volleyball this Saturday at 2pm, Venice Beach Court 4'}
+              placeholder={isEmbed ? 'Board game night @ Alexander Library at 12:30pm' : 'e.g. Volleyball this Saturday at 2pm, Venice Beach Court 4'}
               value={nlInput}
               maxLength={MAX_DESCRIPTION}
               onChange={e => handleNlInput(e.target.value)}
