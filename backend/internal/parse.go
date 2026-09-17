@@ -131,7 +131,7 @@ func (h *EventHandlers) ParseEvent(w http.ResponseWriter, r *http.Request) {
 
 Return ONLY a JSON object with these exact keys:
 - "title": string (event name, required, never null)
-- "date": string or null (ISO date YYYY-MM-DD, resolve relative dates like "Saturday" using today's date)
+- "date": string or null (ISO date YYYY-MM-DD, resolve relative dates like "Saturday" using today's date; null if the input names no date or day — never assume today)
 - "time": string or null (24-hour HH:MM format, e.g. "14:00" for 2pm)
 - "location": string or null
 - "emoji": string (single emoji that best represents the event, e.g. "🏐" for volleyball, "🎉" for a party, "🍕" for a dinner — never null, never more than one emoji)
