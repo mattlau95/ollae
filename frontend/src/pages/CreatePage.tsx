@@ -2,8 +2,29 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { celebrate } from '../celebrate'
 
-import { api } from '../api'
+import { API, api } from '../api'
+import { EMBED_PARENTS, isEmbed, lockParentOrigin, newTab, postToParent, useEmbedHeight } from '../embed'
 import { Toast } from '../Toast'
+
+const MAX_DESCRIPTION = 500
+
+// YYYY-MM-DD in the visitor's timezone.
+function localDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// A description with a time but no date ("…at 12:30pm") means the next
+// time that clock time comes around: today if it's still ahead, otherwise
+// tomorrow.
+function defaultDateFor(time: string, now = new Date()) {
+  const [h, m] = time.split(':').map(Number)
+  const today = new Date(now)
+  today.setHours(h, m, 0, 0)
+  if (today > now) return { date: localDate(today), day: 'today' as const }
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return { date: localDate(tomorrow), day: 'tomorrow' as const }
+}
 
 export default function CreatePage() {
   useEffect(() => { document.title = 'Create Event · ollae.app' }, [])
@@ -20,6 +41,7 @@ export default function CreatePage() {
   const [nlInput, setNlInput] = useState('')
   const [parsing, setParsing] = useState(false)
   const [assumed, setAssumed] = useState<Set<string>>(new Set())
+  const [defaultedDate, setDefaultedDate] = useState<'today' | 'tomorrow' | null>(null)
 
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
@@ -36,10 +58,36 @@ export default function CreatePage() {
 
   const [toast, setToast] = useState<string | null>(null)
 
-  // Scroll the action button into view when an event is first created,
-  // so the Edit button + both share cards are visible on mobile.
+  const frameRef = useEmbedHeight<HTMLDivElement>(slug ? 'share' : view)
+
+  // Embed mode: the portfolio can prefill the description (never submit it),
+  // and hears about every change to it.
   useEffect(() => {
-    if (slug && !isEditing) {
+    if (!isEmbed) return
+    function onMessage(e: MessageEvent) {
+      if (e.source !== window.parent || !EMBED_PARENTS.includes(e.origin)) return
+      if (e.data?.type !== 'ollae:prefill' || typeof e.data.text !== 'string') return
+      lockParentOrigin(e.origin)
+      const text = e.data.text.slice(0, MAX_DESCRIPTION)
+      setNlInput(text)
+      setView('nl')
+      postToParent({ type: 'ollae:input', text })
+    }
+    window.addEventListener('message', onMessage)
+    postToParent({ type: 'ollae:ready' })
+    return () => window.removeEventListener('message', onMessage)
+  }, [])
+
+  function handleNlInput(text: string) {
+    setNlInput(text)
+    postToParent({ type: 'ollae:input', text })
+  }
+
+  // Scroll the action button into view when an event is first created,
+  // so the Edit button + both share cards are visible on mobile. Not in a
+  // frame: that would scroll the portfolio page instead.
+  useEffect(() => {
+    if (slug && !isEditing && !isEmbed) {
       setTimeout(() => {
         editBtnRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       }, 150)
@@ -64,20 +112,39 @@ export default function CreatePage() {
       const res = await api('/parse-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: nlInput.trim() }),
+        body: JSON.stringify({ input: nlInput.trim(), today: localDate(new Date()) }),
         signal: AbortSignal.timeout(30_000),
       })
-      if (res.status === 429 || res.status === 503) {
-        setToast('Busy right now — try again in a minute, or fill in the details manually.')
-        return
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (err.code === 'daily_cap') {
+          goManual()
+          setToast(err.error)
+          return
+        }
+        if (err.code === 'rate_limited' || err.code === 'invalid') {
+          setToast(err.error)
+          return
+        }
+        if (res.status === 429 || res.status === 503) {
+          setToast('Busy right now — try again in a minute, or fill in the details manually.')
+          return
+        }
+        throw new Error()
       }
-      if (!res.ok) throw new Error()
       const parsed = await res.json()
 
       const newAssumed = new Set<string>()
       setTitle(parsed.title ?? '')
       if (parsed.title) newAssumed.add('title')
-      setDate(parsed.date ?? '')
+      if (!parsed.date && parsed.time) {
+        const fallback = defaultDateFor(parsed.time)
+        setDate(fallback.date)
+        setDefaultedDate(fallback.day)
+      } else {
+        setDate(parsed.date ?? '')
+        setDefaultedDate(null)
+      }
       if (parsed.date) newAssumed.add('date')
       setTime(parsed.time ?? '')
       if (parsed.time) newAssumed.add('time')
@@ -100,6 +167,7 @@ export default function CreatePage() {
     setLocation('')
     setEmoji('')
     setAssumed(new Set())
+    setDefaultedDate(null)
     setView('form')
   }
 
@@ -119,12 +187,19 @@ export default function CreatePage() {
           location: location.trim() || undefined,
           event_date: buildEventDate(),
           emoji: emoji || undefined,
+          demo: isEmbed || undefined,
         }),
       })
-      if (!res.ok) throw new Error('Failed to create event')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (err.code !== 'invalid' && err.code !== 'rate_limited') throw new Error('Failed to create event')
+        setToast(err.error)
+        return
+      }
       const event = await res.json()
       setSlug(event.slug)
       setAdminToken(event.admin_token ?? null)
+      postToParent({ type: 'ollae:created' })
       celebrate()
     } catch {
       setToast('Something went wrong. Try again.')
@@ -147,7 +222,12 @@ export default function CreatePage() {
           event_date: buildEventDate(),
         }),
       })
-      if (!res.ok) throw new Error('Failed to update event')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (err.code !== 'invalid') throw new Error('Failed to update event')
+        setToast(err.error)
+        return
+      }
       setIsEditing(false)
     } catch {
       setToast('Something went wrong. Try again.')
@@ -177,11 +257,11 @@ export default function CreatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6 sm:py-12 overflow-y-auto">
-      <Toast message={toast} onDismiss={() => setToast(null)} />
+    <div ref={frameRef} className={`${isEmbed ? 'py-6' : 'min-h-screen py-6 sm:py-12 overflow-y-auto'} bg-bg-base flex flex-col items-center px-4`}>
+      {!isEmbed && <Toast message={toast} onDismiss={() => setToast(null)} />}
       <div className="w-full max-w-sm flex flex-col gap-5 flex-1">
 
-        <Link to="/create">
+        <Link to="/create" {...newTab}>
           <img src="/ollae-logo.svg" alt="ollae" className="h-7 w-auto" />
         </Link>
 
@@ -196,12 +276,14 @@ export default function CreatePage() {
             <label htmlFor="nl-input" className="sr-only">Describe your event</label>
             <textarea
               id="nl-input"
-              placeholder={"e.g. Volleyball this Saturday at 2pm, Venice Beach Court 4"}
+              placeholder={isEmbed ? 'Ollae Demo @ Alexander Library at 12:30pm' : 'e.g. Volleyball this Saturday at 2pm, Venice Beach Court 4'}
               value={nlInput}
-              onChange={e => setNlInput(e.target.value)}
+              maxLength={MAX_DESCRIPTION}
+              onChange={e => handleNlInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleParse() } }}
               className={`${baseInput} resize-none h-28`}
             />
+            {isEmbed && <Toast message={toast} onDismiss={() => setToast(null)} />}
             <button
               onClick={handleParse}
               disabled={!nlInput.trim() || parsing}
@@ -256,8 +338,11 @@ export default function CreatePage() {
                     id="event-date"
                     type="date"
                     value={date}
-                    onChange={e => { setDate(e.target.value); clearAssumed('date') }}
-                    className={fieldClass('date')}
+                    onChange={e => { setDate(e.target.value); clearAssumed('date'); setDefaultedDate(null) }}
+                    aria-describedby={defaultedDate ? 'date-default-hint' : undefined}
+                    className={defaultedDate
+                      ? `${baseInput} border-dashed border-[#F59E0B]/70 focus:border-[#F59E0B]`
+                      : fieldClass('date')}
                   />
                 </div>
                 <div className="flex flex-col gap-2 flex-1 min-w-0">
@@ -271,6 +356,13 @@ export default function CreatePage() {
                   />
                 </div>
               </div>
+              {defaultedDate && (
+                <p id="date-default-hint" className="text-sm text-[#F59E0B] -mt-1">
+                  {defaultedDate === 'today'
+                    ? 'No date given, so we picked today.'
+                    : 'No date given, and that time has passed today, so we picked tomorrow.'}
+                </p>
+              )}
 
               <div className="flex flex-col gap-2">
                 <label htmlFor="event-location" className="text-xs font-normal text-text-primary">Location</label>
@@ -288,6 +380,8 @@ export default function CreatePage() {
             {nlInput && !slug && !isEditing && (
               <p className="text-base font-medium text-text-primary">Looks good?</p>
             )}
+
+            {isEmbed && <Toast message={toast} onDismiss={() => setToast(null)} />}
 
             <button
               ref={editBtnRef}
@@ -348,7 +442,27 @@ export default function CreatePage() {
                       </span>
                     </div>
                   </button>
+                  {isEmbed && (
+                    <a href={eventUrl} {...newTab} className="self-center py-2 text-base text-text-primary underline underline-offset-2 hover:opacity-70 transition-opacity">
+                      Open the event ↗
+                    </a>
+                  )}
                 </div>
+
+                {isEmbed && (
+                  <figure className="flex flex-col gap-2">
+                    <img
+                      src={`${API}/og/${slug}?v=2`}
+                      alt={`Link preview card for ${title}`}
+                      width={1200}
+                      height={630}
+                      className="w-full h-auto rounded-xl border border-white/[0.08]"
+                    />
+                    <figcaption className="text-sm text-text-muted text-center">
+                      This is how your link looks in a group chat.
+                    </figcaption>
+                  </figure>
+                )}
 
                 {adminUrl && (
                   <div className="flex flex-col gap-3">
@@ -373,7 +487,16 @@ export default function CreatePage() {
                         </span>
                       </div>
                     </button>
-                    {retentionMonths !== null && (
+                    {isEmbed && (
+                      <a href={adminUrl} {...newTab} className="self-center py-2 text-base text-text-primary underline underline-offset-2 hover:opacity-70 transition-opacity">
+                        Open the edit link ↗
+                      </a>
+                    )}
+                    {isEmbed ? (
+                      <p className="text-xs text-text-disabled text-center">
+                        This is a demo event. It'll be deleted in 3 days.
+                      </p>
+                    ) : retentionMonths !== null && (
                       <p className="text-xs text-text-disabled text-center">
                         This event and its data will be automatically deleted {retentionMonths} month{retentionMonths !== 1 ? 's' : ''} after it passes.
                       </p>

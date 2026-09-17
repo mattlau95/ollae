@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Ref } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { celebrate } from '../celebrate'
 
 import { api } from '../api'
+import { GUESTBOOK_SLUG, isEmbed, newTab, setNoindex, useEmbedHeight } from '../embed'
 import { Toast } from '../Toast'
 
 type Response = {
@@ -21,6 +22,8 @@ type Event = {
   event_date: string | null
   created_at: string
   emoji?: string
+  is_demo?: boolean
+  append_only?: boolean
 }
 
 type RSVPStatus = 'in' | 'out' | 'remind_me' | null
@@ -55,6 +58,7 @@ export default function RSVPPage() {
   const [notifyVia, setNotifyVia] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
 
   function handleSetStatus(s: RSVPStatus) {
     setStatus(s)
@@ -86,6 +90,9 @@ export default function RSVPPage() {
         setEvent(data.event)
         setResponses(data.responses)
         document.title = `${data.event.title} · ollae.app`
+        // The guestbook's names belong to visitors, and demo events are
+        // throwaway, so neither should show up in search.
+        if (data.event.slug === GUESTBOOK_SLUG || data.event.is_demo) setNoindex()
         setLoading(false)
 
         // Pre-fill edit form fields
@@ -149,7 +156,12 @@ export default function RSVPPage() {
           event_date: eventDate,
         }),
       })
-      if (!res.ok) throw new Error('Failed to save')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (err.code !== 'invalid') throw new Error('Failed to save')
+        setToast(err.error)
+        return
+      }
       const updated: Event = await res.json()
       setEvent(updated)
       setIsEditing(false)
@@ -179,7 +191,18 @@ export default function RSVPPage() {
           ...(status === 'remind_me' && notifyVia.trim() ? { notify_via: notifyVia.trim() } : {}),
         }),
       })
-      if (!res.ok) throw new Error('Failed to submit')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        if (err.code === 'name_taken') {
+          setNameError(err.error)
+          document.getElementById('rsvp-name')?.focus()
+        } else if (err.code === 'rate_limited' || err.code === 'invalid') {
+          setToast(err.error)
+        } else {
+          throw new Error('Failed to submit')
+        }
+        return
+      }
       const updated: Response[] = await res.json()
       setResponses(updated)
       setSubmitted(true)
@@ -190,14 +213,28 @@ export default function RSVPPage() {
     }
   }
 
+  async function handleDeleteResponse(r: Response) {
+    if (!adminToken || !window.confirm(`Remove ${r.name}'s RSVP?`)) return
+    try {
+      const res = await api(`/events/${slug}/responses/${r.id}?admin=${adminToken}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete')
+      setResponses(await res.json())
+    } catch {
+      setToast("Couldn't remove that RSVP. Try again.")
+    }
+  }
+
+  const screen = loading ? 'loading' : error ? 'error' : submitted ? 'success' : 'form'
+  const frameRef = useEmbedHeight<HTMLDivElement>(screen)
+
   if (loading) return (
-    <div role="status" aria-live="polite" className="min-h-screen bg-bg-base flex items-center justify-center text-text-muted">
+    <div ref={frameRef} role="status" aria-live="polite" className={`${isEmbed ? 'py-16' : 'min-h-screen'} bg-bg-base flex items-center justify-center text-text-muted`}>
       {slow ? 'Waking up the server — one sec…' : 'Loading...'}
     </div>
   )
 
   if (error) return (
-    <div role="alert" className="min-h-screen bg-bg-base flex flex-col items-center justify-center gap-6 px-6 text-center">
+    <div ref={frameRef} role="alert" className={`${isEmbed ? 'py-16' : 'min-h-screen'} bg-bg-base flex flex-col items-center justify-center gap-6 px-6 text-center`}>
       <p className="text-lg text-text-primary max-w-xs">
         {error === 'not_found'
           ? "This event doesn't exist — it may have expired, or the link is wrong."
@@ -211,13 +248,13 @@ export default function RSVPPage() {
           Try again
         </button>
       )}
-      <a href="/" className="text-base text-text-muted underline underline-offset-2 hover:text-text-primary transition-colors">
+      <a href="/" {...newTab} className="text-base text-text-muted underline underline-offset-2 hover:text-text-primary transition-colors">
         Create your own event
       </a>
     </div>
   )
 
-  if (submitted) return <SuccessScreen name={name} status={status!} guests={guests} eventEmoji={event?.emoji || '🎉'} onBack={() => setSubmitted(false)} />
+  if (submitted) return <SuccessScreen frameRef={frameRef} name={name} status={status!} guests={guests} eventEmoji={event?.emoji || '🎉'} appendOnly={!!event?.append_only} onBack={() => setSubmitted(false)} />
 
   const attendingCount = responses.filter(r => r.status === 'in').reduce((sum, r) => sum + 1 + (r.guests || 0), 0)
   const sorted = [...responses].reverse()
@@ -226,11 +263,11 @@ export default function RSVPPage() {
   const canRemindMe = !!notifyVia.trim()
 
   return (
-    <div className="min-h-screen bg-bg-base flex flex-col items-center px-4 py-6">
-      <Toast message={toast} onDismiss={() => setToast(null)} />
+    <div ref={frameRef} className={`${isEmbed ? '' : 'min-h-screen'} bg-bg-base flex flex-col items-center px-4 py-6`}>
+      {!isEmbed && <Toast message={toast} onDismiss={() => setToast(null)} />}
       <div className="w-full max-w-sm flex flex-col gap-6 flex-1">
 
-        <Link to="/create">
+        <Link to="/create" {...newTab}>
           <img src="/ollae-logo.svg" alt="ollae" className="h-7 w-auto" />
         </Link>
 
@@ -323,9 +360,14 @@ export default function RSVPPage() {
 
         {/* Attending count + activity feed */}
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
             <span className="text-2xl font-bold text-text-primary">{attendingCount}</span>
             <span className="text-2xl font-normal text-text-primary">attending</span>
+            {responses.length > 0 && (
+              <span className="text-base text-text-muted">
+                · {responses.length} {responses.length === 1 ? 'response' : 'responses'}
+              </span>
+            )}
           </div>
 
           {responses.length === 0 && (
@@ -336,10 +378,22 @@ export default function RSVPPage() {
               <div className="bg-bg-surface rounded-lg overflow-hidden">
                 <div className="px-4 pt-4 flex flex-col">
                   {visible.map(r => (
-                    <p key={r.id} className="text-base text-text-muted leading-[150%] pb-4">
-                      <span className="text-text-primary font-medium">{r.name}</span>
-                      {' '}{statusText(r.status, r.guests, event?.emoji || '🎉')}{' · '}{timeAgo(r.created_at)}
-                    </p>
+                    <div key={r.id} className="flex items-start gap-2 pb-4">
+                      <p className="flex-1 min-w-0 text-base text-text-muted leading-[150%]">
+                        <span className="text-text-primary font-medium">{r.name}</span>
+                        {' '}{statusText(r.status, r.guests, event?.emoji || '🎉')}{' · '}{timeAgo(r.created_at)}
+                      </p>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDeleteResponse(r)}
+                          aria-label={`Remove ${r.name}'s RSVP`}
+                          title="Remove RSVP"
+                          className="shrink-0 w-11 h-11 -my-2.5 -mr-3 inline-flex items-center justify-center text-text-muted hover:text-[#EF4444] transition-colors"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -349,7 +403,7 @@ export default function RSVPPage() {
                     onClick={() => setShowAll(v => !v)}
                     className="py-2 text-base text-text-primary underline underline-offset-2 transition-opacity hover:opacity-70"
                   >
-                    {showAll ? 'Show less' : 'See All'}
+                    {showAll ? 'Show less' : `Show all ${responses.length}`}
                   </button>
                 </div>
               )}
@@ -374,12 +428,21 @@ export default function RSVPPage() {
                 autoComplete="name"
                 placeholder="Enter name here"
                 value={name}
-                onChange={e => setName(e.target.value)}
-                className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary placeholder-text-muted border border-white/[0.08] focus:outline-none focus:border-white/25 transition-colors"
+                onChange={e => { setName(e.target.value); setNameError(null) }}
+                maxLength={40}
+                aria-invalid={!!nameError}
+                aria-describedby={nameError ? 'rsvp-name-error' : undefined}
+                className={`w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary placeholder-text-muted border focus:outline-none transition-colors ${
+                  nameError ? 'border-[#EF4444] focus:border-[#EF4444]' : 'border-white/[0.08] focus:border-white/25'
+                }`}
               />
-              <p className="text-sm text-text-muted text-center">
-                Use a name the organizer would recognize as you.
-              </p>
+              {nameError ? (
+                <p id="rsvp-name-error" role="alert" className="text-sm text-[#F87171] text-center">{nameError}</p>
+              ) : (
+                <p className="text-sm text-text-muted text-center">
+                  Use a name the organizer would recognize as you.
+                </p>
+              )}
             </div>
 
             {/* RSVP buttons */}
@@ -455,11 +518,11 @@ export default function RSVPPage() {
                     <input
                       type="number"
                       min="1"
-                      max="99"
+                      max="20"
                       value={guests}
                       onChange={e => {
                         const n = parseInt(e.target.value, 10)
-                        if (!isNaN(n) && n >= 1) setGuests(n)
+                        if (!isNaN(n) && n >= 1) setGuests(Math.min(n, 20))
                       }}
                       autoFocus
                       className="w-20 bg-bg-surface rounded-xl px-3 py-2 text-base text-text-primary border border-[#22C55E] focus:outline-none text-center [color-scheme:dark]"
@@ -471,8 +534,8 @@ export default function RSVPPage() {
             )}
           </div>
 
-          {/* Not sure yet */}
-          <div className="flex flex-col gap-3">
+          {/* Not sure yet — off for demo events, which collect no emails */}
+          {!event!.is_demo && <div className="flex flex-col gap-3">
             <div className="flex justify-center">
               <button
                 onClick={() => handleSetStatus('remind_me')}
@@ -507,9 +570,20 @@ export default function RSVPPage() {
                 >
                   {submitting ? 'Submitting...' : 'Remind me →'}
                 </button>
+                <p className="text-sm text-text-muted text-center">
+                  We'll only use your email for this one reminder, then delete it.
+                </p>
               </div>
             )}
-          </div>
+          </div>}
+
+          {event!.is_demo && (
+            <p className="text-sm text-text-muted text-center">
+              This is a demo event. It'll be deleted 3 days after it was created.
+            </p>
+          )}
+
+          {isEmbed && <Toast message={toast} onDismiss={() => setToast(null)} />}
 
           {/* Submit — hidden for remind_me (that flow has its own button) */}
           {status !== 'remind_me' && (
@@ -532,7 +606,15 @@ export default function RSVPPage() {
   )
 }
 
-function SuccessScreen({ name, status, guests, eventEmoji, onBack }: { name: string; status: RSVPStatus; guests: number; eventEmoji: string; onBack: () => void }) {
+function SuccessScreen({ frameRef, name, status, guests, eventEmoji, appendOnly, onBack }: {
+  frameRef: Ref<HTMLDivElement>
+  name: string
+  status: RSVPStatus
+  guests: number
+  eventEmoji: string
+  appendOnly: boolean
+  onBack: () => void
+}) {
   useEffect(() => {
     if (status !== 'in') return
     celebrate()
@@ -545,13 +627,15 @@ function SuccessScreen({ name, status, guests, eventEmoji, onBack }: { name: str
   const statusColor = status === 'in' ? 'text-[#22C55E]' : status === 'out' ? 'text-[#EF4444]' : 'text-status-remind'
 
   return (
-    <div className="min-h-screen bg-bg-base flex flex-col items-center justify-center px-4 gap-6 text-center">
+    <div ref={frameRef} className={`${isEmbed ? 'py-12' : 'min-h-screen'} bg-bg-base flex flex-col items-center justify-center px-4 gap-6 text-center`}>
       <div className="text-[64px] leading-none">{emoji}</div>
       <h2 className="text-2xl font-semibold text-text-primary">{message}</h2>
       <p className={`text-base ${statusColor}`}>{statusLine}</p>
-      <p className="text-base text-text-disabled max-w-xs">
-        Changed your plans? Just reopen this link and resubmit your name.
-      </p>
+      {!appendOnly && (
+        <p className="text-base text-text-disabled max-w-xs">
+          Changed your plans? Just reopen this link and resubmit your name.
+        </p>
+      )}
       <button onClick={onBack} className="text-base text-text-primary underline underline-offset-2 transition-opacity hover:opacity-70">
         ← View who's coming
       </button>

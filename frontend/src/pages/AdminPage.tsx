@@ -21,6 +21,8 @@ type AdminEvent = {
   event_date: string | null
   created_at: string
   emoji: string
+  is_demo: boolean
+  append_only: boolean
   counts: { in: number; out: number; remind_me: number }
   responses: AdminResponse[]
 }
@@ -108,6 +110,23 @@ export default function AdminPage() {
     if (!window.confirm(`Delete "${title}" and all its responses?`)) return
     await api(`/admin/events/${slug}`, { method: 'DELETE', headers: authHeaders(key!) })
     setData(prev => prev ? { ...prev, events: prev.events.filter(e => e.slug !== slug) } : null)
+  }
+
+  async function toggleAppendOnly(ev: AdminEvent) {
+    const next = !ev.append_only
+    const res = await api(`/admin/events/${ev.slug}/append-only`, {
+      method: 'PUT',
+      headers: { ...authHeaders(key!), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ append_only: next }),
+    }).catch(() => null)
+    if (!res?.ok) {
+      setToast('Failed to update append-only.')
+      return
+    }
+    setData(prev => prev ? {
+      ...prev,
+      events: prev.events.map(e => e.slug === ev.slug ? { ...e, append_only: next } : e),
+    } : null)
   }
 
   async function deleteResponse(eventSlug: string, responseId: string, name: string) {
@@ -420,6 +439,16 @@ export default function AdminPage() {
                     {ev.location && <span className="text-xs text-gray-400">{ev.location}</span>}
                     <span className="text-xs text-gray-400">{formatDate(ev.event_date)}</span>
                     <span className="text-xs text-gray-400">{ev.slug}</span>
+                    {ev.is_demo && <span className="text-xs text-sky-300 border border-sky-300/40 rounded px-1">demo</span>}
+                    <label className="inline-flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={ev.append_only}
+                        onChange={() => toggleAppendOnly(ev)}
+                        className="accent-amber-500 cursor-pointer w-4 h-4"
+                      />
+                      append-only
+                    </label>
                   </div>
                 )}
               </div>
