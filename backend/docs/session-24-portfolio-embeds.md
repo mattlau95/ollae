@@ -2,7 +2,7 @@
 
 The guestbook and the create demo can now be framed by matthewclau.com. Three deploys went out: a privacy fix, reminder groundwork, and the embed feature with its abuse limits. All are verified against production.
 
-**Backend:** Fly.io `ollae-backend` (release v31) · **Frontend:** Vercel `ollae.app` · **Branch:** `master` at `cd4c98a`
+**Backend:** Fly.io `ollae-backend` (release v32) · **Frontend:** Vercel `ollae.app` · **Branch:** `master` at `c162ea0`
 
 ---
 
@@ -13,6 +13,8 @@ The guestbook and the create demo can now be framed by matthewclau.com. Three de
 | Both embeds | **Live.** One CSP header per response on every route, allowlist only where intended. |
 | Privacy fix | **Live.** Reminder emails no longer appear in public event JSON. |
 | Append-only guestbook | **On.** Your RSVP stays; nobody can resubmit a name to change it. |
+| Guestbook reminders | **Off.** Remind me is recorded; no email is taken or sent. |
+| Blocked words | **30 in production**, managed in `/admin` (collapsed and masked). None in the repo or its history. |
 | iPhone check | **To do**, once the portfolio page with the iframes is live. |
 
 ---
@@ -109,11 +111,12 @@ Rate limits live in memory, so each Fly machine counts separately (2 machines, o
 ```
 6b2a5f9 fix: keep blocked words out of the repo, and turn reminders off on the guestbook
 cd4c98a feat: board game night as the create demo's example
+c162ea0 feat: hide blocked words on /admin until shown, and mask them
 ```
 
-History was rewritten to remove blocked terms from the commit that first added the list. Hashes in this document are the rewritten ones.
+History was rewritten to remove blocked terms from the commit that first added the list, and force-pushed. Hashes in this document are the rewritten ones. GitHub still serves the old commit by exact hash until a Support request removes it.
 
-**Follow-up:** blocked words now live only in a `blocked_terms` table, edited in `/admin` and reloaded on every machine within 15 seconds. None are in the repo, and an empty list lets everything through. Matching is by whole word, after lowercasing, undoing character swaps and joining spelled-out letters. The guestbook has `reminders_off`: Remind me is still an answer, but no email is taken or sent.
+**Follow-up:** blocked words now live only in a `blocked_terms` table, edited in `/admin` (collapsed and masked) and reloaded on every machine within 15 seconds. None are in the repo, and an empty list lets everything through. Production was seeded with the 30 original terms. Matching is by whole word, after lowercasing, undoing character swaps and joining spelled-out letters. The guestbook has `reminders_off`: Remind me is still an answer, but no email is taken or sent.
 
 ---
 
@@ -196,11 +199,8 @@ Every response had exactly one `Content-Security-Policy` line with one `frame-an
 ## Still open
 
 - **You:** iPhone check in Safari once the portfolio embeds are live (checklist below).
-- **You:** close MAT-720 in Linear.
-- **Cleanup:** preview deployment `ollae-rhni5gbmo-matthew-lau-s-projects.vercel.app` is still up (private, behind Vercel Authentication).
-- **Cleanup:** the local Anthropic key is in `backend/.env` (gitignored). Delete it or revoke the key when you're done.
-- **Cleanup:** production test event `268s0vmf` from deploy A; the retention cleanup removes it on its next run.
 - **Watch:** Resend's Free plan allows 100 emails a day. Reminders beyond that are logged, not sent.
+- **Optional:** ask GitHub Support to remove cached views of the pre-rewrite commit in `mattlau95/ollae`.
 
 ---
 

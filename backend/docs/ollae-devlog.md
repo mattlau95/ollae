@@ -1787,6 +1787,46 @@ First implementation used `confetti.shapeFromText()` to rain the event's own emo
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend · canvas-confetti*
 *Tools: Claude Code · Linear*
 
+## Session 22 — Sep 15, 2026
+
+---
+
+### What We Built
+
+A pre-launch audit and polish pass for a Product Hunt launch, and for recruiters reading the code. Full notes, commit by commit: `docs/session-22-launch-polish.md`.
+
+---
+
+### Issues Closed
+
+**MAT-706 — Verify the API base URL before pushing the frontend**
+**MAT-708 — Browser QA pass for Session 22 changes**
+**MAT-709 — Harden /parse-event before launch**
+**MAT-710 — Fix devlog Session 18/19 ordering**
+
+---
+
+### What Changed
+
+A read-only audit first (repo legibility, code quality, WCAG 2.2 AA, launch readiness), then fixes in severity order, one commit per fix: 35 commits in all.
+
+- **P0:** removed a hardcoded Postgres fallback URL from `main.go`; raised disabled-text contrast to AA; added labels to placeholder-only inputs and associated visible labels; sent browsers on a missing event into the app instead of a bare 404.
+- **P1:** admin auth on the Facebook rescrape endpoint; constant-time admin secret comparison; `NewDB` returns an error; lint passes; a real RSVP error state; a toast in place of `window.alert`; an `api()` wrapper with timeouts and a cold-start message; README architecture rewritten.
+- **P2:** unused dependency removed; autofill on name and email; JSON errors everywhere; first backend tests; larger tap targets.
+- **Follow-up:** Claude calls retry with backoff, and `/parse-event` is rate-limited and on the `api()` wrapper.
+
+---
+
+### Still Open
+
+- MAT-705, rotate the Postgres password (done in Session 23)
+- MAT-707, deploy (done in Session 24)
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Vercel · Resend*
+*Tools: Claude Code · Linear · Lighthouse · axe · pa11y*
+
 ## Session 23 — Sep 16, 2026
 
 ---
@@ -1863,3 +1903,83 @@ Nested quotes got mangled, and the first hash that came back was the hash of `"1
 
 *Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Fly Postgres (postgres-flex 17.2) · Vercel*
 *Tools: Claude Code · flyctl · Linear*
+
+## Session 24 — Sep 16–17, 2026
+
+---
+
+### What We Built
+
+Two live Ollae screens for the portfolio case study at matthewclau.com, framed in 390px iframes: a permanent guestbook event anyone can RSVP to, and the create screen as a working demo. Getting there also meant finally deploying the Session 22 work, fixing a privacy bug, and hardening reminders and abuse limits. Full notes, with the iPhone checklist: `docs/session-24-portfolio-embeds.md`.
+
+---
+
+### Issues Closed
+
+**MAT-720 — Live portfolio embeds: framable guestbook + create demo**
+**MAT-707 — Deploy Session 22 — backend first, then push**
+
+---
+
+### What Changed
+
+**Three deploys, each verified in production**
+
+1. **Privacy fix.** Public `GET /events/:slug` and the RSVP response returned `notify_via`, so anyone with a link could read every Remind me email. They now return a type without it. Fly had been running the backend from June 3 (`14f60c0`), so this deploy also shipped 40 finished commits that had never reached it.
+2. **Groundwork.** `schema.sql` synced with production (it didn't load before). Reminders are claimed atomically with `SKIP LOCKED` before sending, batched within Resend's Free plan (100 emails a day, 10 requests a second), and stored emails are cleared a day after the event.
+3. **Embeds.** CSP `frame-ancestors` allows only the portfolio origins, and only on the guestbook and `/create` with `?embed=1`; every other response sends `'none'`, on both Vercel and the Go SSR page. Embed mode posts its height to an allowlisted parent, links open new tabs, and the create screen speaks a small message protocol (`ready`, `input`, `created`, `prefill`).
+
+**Guestbook** (`wssrfd7v`): response count with "Show all N", append-only (a name already on the list gets a friendly error), organizer delete from the edit link, noindex, and `reminders_off`, so Remind me is recorded but never takes an email.
+
+**Create demo:** events made in the frame are `is_demo` (no reminders, noindex, deleted after 3 days by an hourly cleanup), the share screen shows the OG card, and a time with no date defaults to today or tomorrow with its own hint.
+
+**Abuse limits:** per-IP rate limits keyed on `Fly-Client-IP` (IPv6 by /64), a daily cap of 300 Claude calls counted in Postgres, length caps, a single-emoji check, and blocked words.
+
+**Blocked words out of the repo.** The first version hardcoded the list in `validate.go`. The repo is public and linked from the portfolio, so the list moved to a `blocked_terms` table edited in `/admin` (collapsed and masked on screen), with tests using placeholder words. History was rewritten so no commit on GitHub contains it, verified by a scan of every commit that never printed a word.
+
+---
+
+### Product Decisions Made
+
+| Decision | Rationale |
+|---|---|
+| Embed URL skips the SSR page (`?_src=app&embed=1`) | Loads faster, and keeps `document.referrer` pointing at the portfolio for Firefox's origin check |
+| `embed=1` required for framing, not just the path | A plain `/create` or guestbook link can never be framed |
+| Messages only to an allowlisted parent origin | Never `'*'`; if the parent can't be identified, nothing is posted |
+| Guestbook is append-only and reminders-off, not a demo event | It must never be cleaned up, and strangers shouldn't be able to change each other's answers |
+| Blocked words live in the database | Keeps them out of a public repo, and they change without a deploy |
+| Whole-word matching only | Place names that contain a blocked word still pass |
+| Rewrite history rather than a forward fix | Nobody else uses the repo; the old commit is now only reachable by exact hash |
+
+---
+
+### Things That Tripped Us Up
+
+**Claude assumed today's date**
+
+"Ollae Demo @ Alexander Library at 12:30pm" came back with today's date every time, so the app's default never ran, and after 12:30 the event would have started in the past. The parser prompt now asks for `null` when no date or day is named.
+
+**`vercel dev` can't test header rules**
+
+It ignores `has` conditions and sent no CSP headers at all, so the framing rules were checked on a preview deployment instead. That preview also showed that on the SSR route, Vercel's header replaces the one from Fly rather than adding a second.
+
+**A test that couldn't fail**
+
+The first concurrent-claim test for reminders still passed with `SKIP LOCKED` removed. Sixteen claimers racing over 400 rows made it fail every time without the lock.
+
+**Windows shells**
+
+A `\.` in `notepad backend\.env` became `backend.env` in the repo root, briefly untracked but not gitignored. A heredoc stripped regex backslashes, so a scan loaded no terms and reported everything clean; a positive control now runs before trusting any zero-result scan.
+
+---
+
+### Still Open
+
+- iPhone Safari check of both embeds once the portfolio page is live
+- GitHub still serves the old pre-rewrite commit by exact hash; removing it takes a GitHub Support request
+- Resend's Free plan caps reminders at 100 emails a day
+
+---
+
+*Stack: Go 1.26.3 · React 19 · TypeScript · Vite · Tailwind CSS v4 · Fly.io · Fly Postgres · Vercel · Resend · Claude Haiku 4.5*
+*Tools: Claude Code · Linear · Playwright · flyctl · Vercel CLI*
