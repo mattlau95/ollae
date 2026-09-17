@@ -37,6 +37,41 @@ type Response struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// PublicResponse is a Response as anyone with the event link sees it. It has
+// no NotifyVia: reminder emails are visible only to /admin.
+type PublicResponse struct {
+	ID        string    `json:"id"`
+	EventID   string    `json:"event_id"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	Guests    int       `json:"guests"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// publicResponses lists an event's responses, oldest first, without emails.
+func publicResponses(db *sql.DB, eventID string) ([]PublicResponse, error) {
+	rows, err := db.Query(`
+		SELECT id, event_id, name, status, guests, created_at
+		FROM responses WHERE event_id = $1
+		ORDER BY created_at ASC
+	`, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	responses := []PublicResponse{}
+	for rows.Next() {
+		var resp PublicResponse
+		if err := rows.Scan(&resp.ID, &resp.EventID, &resp.Name,
+			&resp.Status, &resp.Guests, &resp.CreatedAt); err != nil {
+			return nil, err
+		}
+		responses = append(responses, resp)
+	}
+	return responses, rows.Err()
+}
+
 type EventHandlers struct {
 	DB           *sql.DB
 	AnthropicKey string
@@ -210,26 +245,10 @@ func (h *EventHandlers) GetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.DB.Query(`
-		SELECT id, event_id, name, status, guests, notify_via, created_at
-		FROM responses WHERE event_id = $1
-		ORDER BY created_at ASC
-	`, event.ID)
+	responses, err := publicResponses(h.DB, event.ID)
 	if err != nil {
 		JSONError(w, http.StatusInternalServerError, "failed to fetch responses")
 		return
-	}
-	defer rows.Close()
-
-	responses := []Response{}
-	for rows.Next() {
-		var resp Response
-		if err := rows.Scan(&resp.ID, &resp.EventID, &resp.Name,
-			&resp.Status, &resp.Guests, &resp.NotifyVia, &resp.CreatedAt); err != nil {
-			JSONError(w, http.StatusInternalServerError, "failed to scan response")
-			return
-		}
-		responses = append(responses, resp)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -348,26 +367,10 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return the full updated response list
-	rows, err := h.DB.Query(`
-		SELECT id, event_id, name, status, guests, notify_via, created_at
-		FROM responses WHERE event_id = $1
-		ORDER BY created_at ASC
-	`, eventID)
+	responses, err := publicResponses(h.DB, eventID)
 	if err != nil {
 		JSONError(w, http.StatusInternalServerError, "failed to fetch responses")
 		return
-	}
-	defer rows.Close()
-
-	responses := []Response{}
-	for rows.Next() {
-		var resp Response
-		if err := rows.Scan(&resp.ID, &resp.EventID, &resp.Name,
-			&resp.Status, &resp.Guests, &resp.NotifyVia, &resp.CreatedAt); err != nil {
-			JSONError(w, http.StatusInternalServerError, "failed to scan response")
-			return
-		}
-		responses = append(responses, resp)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
