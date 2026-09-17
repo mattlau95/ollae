@@ -1931,7 +1931,7 @@ Two live Ollae screens for the portfolio case study at matthewclau.com, framed i
 
 **Guestbook** (`wssrfd7v`): response count with "Show all N", append-only (a name already on the list gets a friendly error), organizer delete from the edit link, noindex, and `reminders_off`, so Remind me is recorded but never takes an email.
 
-**Create demo:** events made in the frame are `is_demo` (no reminders, noindex, deleted after 3 days by an hourly cleanup), the share screen shows the OG card, and a time with no date defaults to today or tomorrow with its own hint.
+**Create demo:** events made in the frame are `is_demo` (no reminders, noindex, deleted after 3 days by an hourly cleanup), the share screen shows the OG card, and a time with no date defaults to today or tomorrow with its own hint. The embed placeholder is "Board game night @ Alexander Library at 12:30pm", which parsed to 🎲 on all five test runs.
 
 **Abuse limits:** per-IP rate limits keyed on `Fly-Client-IP` (IPv6 by /64), a daily cap of 300 Claude calls counted in Postgres, length caps, a single-emoji check, and blocked words.
 
@@ -1976,7 +1976,7 @@ A `\.` in `notepad backend\.env` became `backend.env` in the repo root, briefly 
 ### Still Open
 
 - iPhone Safari check of both embeds once the portfolio page is live
-- GitHub still serves the old pre-rewrite commit by exact hash; removing it takes a GitHub Support request
+- GitHub still serves the old pre-rewrite commit by exact hash; a Support request to remove it is drafted, ready to send
 - Resend's Free plan caps reminders at 100 emails a day
 
 ---
