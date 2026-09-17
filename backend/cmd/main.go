@@ -142,9 +142,9 @@ func main() {
 			internal.JSONError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		deleted := internal.RunCleanup(db)
+		deleted, emailsCleared := internal.RunCleanup(db)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]int{"deleted": deleted})
+		json.NewEncoder(w).Encode(map[string]int{"deleted": deleted, "emails_cleared": emailsCleared})
 	})
 
 	log.Println("Server starting on :8080")

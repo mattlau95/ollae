@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -233,7 +234,12 @@ func (h *EventHandlers) GetRetention(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int{"retention_months": months})
 }
 
-func RunCleanup(db *sql.DB) int {
+// RunCleanup deletes events past the retention period and clears reminder
+// emails once their event is over. The email is collected for one reminder,
+// so it has no use after the event. Event dates are stored as the organizer's
+// wall-clock time labeled UTC, so "over" waits an extra day to cover any
+// timezone.
+func RunCleanup(db *sql.DB) (eventsDeleted, emailsCleared int) {
 	months := getRetentionMonths(db)
 	result, err := db.Exec(`
 		DELETE FROM events
@@ -241,8 +247,26 @@ func RunCleanup(db *sql.DB) int {
 		  AND event_date < now() - ($1 || ' months')::INTERVAL
 	`, strconv.Itoa(months))
 	if err != nil {
-		return 0
+		log.Printf("cleanup: delete events error: %v", err)
+	} else {
+		n, _ := result.RowsAffected()
+		eventsDeleted = int(n)
 	}
-	n, _ := result.RowsAffected()
-	return int(n)
+
+	result, err = db.Exec(`
+		UPDATE responses r
+		SET notify_via = NULL
+		FROM events e
+		WHERE e.id = r.event_id
+		  AND r.notify_via IS NOT NULL
+		  AND e.event_date IS NOT NULL
+		  AND e.event_date < now() - interval '1 day'
+	`)
+	if err != nil {
+		log.Printf("cleanup: clear emails error: %v", err)
+	} else {
+		n, _ := result.RowsAffected()
+		emailsCleared = int(n)
+	}
+	return eventsDeleted, emailsCleared
 }
