@@ -27,18 +27,21 @@ type Event struct {
 	Emoji      string     `json:"emoji"`
 	IsDemo     bool       `json:"is_demo"`
 	AppendOnly bool       `json:"append_only"`
-	AdminToken string     `json:"admin_token,omitempty"` // only returned on create
+	// RemindersOff keeps "Remind me" as an answer but never takes an email,
+	// for events like the portfolio guestbook that nobody will attend.
+	RemindersOff bool   `json:"reminders_off"`
+	AdminToken   string `json:"admin_token,omitempty"` // only returned on create
 }
 
 // ogWarmBase is where CreateEvent pre-warms the OG image; tests clear it.
 var ogWarmBase = "https://ollae.app/og/"
 
 // eventColumns and scanEvent read an Event the same way in every query.
-const eventColumns = `id, slug, title, COALESCE(location, ''), event_date, created_at, emoji, is_demo, append_only`
+const eventColumns = `id, slug, title, COALESCE(location, ''), event_date, created_at, emoji, is_demo, append_only, reminders_off`
 
 func scanEvent(row interface{ Scan(...any) error }, e *Event, extra ...any) error {
 	return row.Scan(append([]any{
-		&e.ID, &e.Slug, &e.Title, &e.Location, &e.EventDate, &e.CreatedAt, &e.Emoji, &e.IsDemo, &e.AppendOnly,
+		&e.ID, &e.Slug, &e.Title, &e.Location, &e.EventDate, &e.CreatedAt, &e.Emoji, &e.IsDemo, &e.AppendOnly, &e.RemindersOff,
 	}, extra...)...)
 }
 
@@ -93,6 +96,7 @@ type EventHandlers struct {
 	AdminSecret    string
 	FBAppToken     string
 	ClaudeDailyCap int
+	Blocklist      *Blocklist // nil lets everything through
 }
 
 func pickEmoji(ctx context.Context, h *EventHandlers, title string) string {
@@ -127,15 +131,15 @@ func pickEmoji(ctx context.Context, h *EventHandlers, title string) string {
 }
 
 // eventFields validates the fields shared by create and update.
-func eventFields(title, location string, eventDate *string) (string, string, error) {
-	title, err := cleanField(title, maxTitleLen, "Event names")
+func eventFields(title, location string, eventDate *string, blocklist *Blocklist) (string, string, error) {
+	title, err := cleanField(title, maxTitleLen, "Event names", blocklist)
 	if err != nil {
 		return "", "", err
 	}
 	if title == "" {
 		return "", "", validationError{"Give your event a name."}
 	}
-	location, err = cleanField(location, maxLocationLen, "Locations")
+	location, err = cleanField(location, maxLocationLen, "Locations", blocklist)
 	if err != nil {
 		return "", "", err
 	}
@@ -167,7 +171,7 @@ func (h *EventHandlers) CreateEvent(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	title, location, err := eventFields(body.Title, body.Location, body.EventDate)
+	title, location, err := eventFields(body.Title, body.Location, body.EventDate, h.Blocklist)
 	if err != nil {
 		writeValidation(w, err)
 		return
@@ -317,7 +321,7 @@ func (h *EventHandlers) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	title, location, err := eventFields(body.Title, body.Location, body.EventDate)
+	title, location, err := eventFields(body.Title, body.Location, body.EventDate, h.Blocklist)
 	if err != nil {
 		writeValidation(w, err)
 		return
@@ -360,7 +364,7 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	name, err := cleanField(body.Name, maxNameLen, "Names")
+	name, err := cleanField(body.Name, maxNameLen, "Names", h.Blocklist)
 	if err != nil {
 		writeValidation(w, err)
 		return
@@ -374,16 +378,6 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusBadRequest, "status must be in, out, or remind_me")
 		return
 	}
-	if body.Status == "remind_me" {
-		if body.NotifyVia == nil || !validEmail(strings.TrimSpace(*body.NotifyVia)) {
-			JSONErrorCode(w, http.StatusBadRequest, "invalid", "That email address doesn't look right.")
-			return
-		}
-		email := strings.TrimSpace(*body.NotifyVia)
-		body.NotifyVia = &email
-	} else {
-		body.NotifyVia = nil
-	}
 	if body.Guests < 0 || body.Guests > maxGuests {
 		JSONErrorCode(w, http.StatusBadRequest, "invalid", fmt.Sprintf("You can bring up to %d guests.", maxGuests))
 		return
@@ -394,8 +388,9 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var eventID string
-	var isDemo, appendOnly bool
-	err = h.DB.QueryRow(`SELECT id, is_demo, append_only FROM events WHERE slug = $1`, slug).Scan(&eventID, &isDemo, &appendOnly)
+	var isDemo, appendOnly, remindersOff bool
+	err = h.DB.QueryRow(`SELECT id, is_demo, append_only, reminders_off FROM events WHERE slug = $1`, slug).
+		Scan(&eventID, &isDemo, &appendOnly, &remindersOff)
 	if err == sql.ErrNoRows {
 		JSONError(w, http.StatusNotFound, "event not found")
 		return
@@ -404,9 +399,29 @@ func (h *EventHandlers) SubmitRSVP(w http.ResponseWriter, r *http.Request) {
 		JSONError(w, http.StatusInternalServerError, "failed to fetch event")
 		return
 	}
-	if isDemo && body.Status == "remind_me" {
+
+	email := ""
+	if body.NotifyVia != nil {
+		email = strings.TrimSpace(*body.NotifyVia)
+	}
+	switch {
+	case isDemo && body.Status == "remind_me":
 		JSONErrorCode(w, http.StatusBadRequest, "invalid", "Reminders are turned off for demo events.")
 		return
+	case remindersOff && email != "":
+		// "Remind me" is still a valid answer here; it just never takes an email.
+		JSONErrorCode(w, http.StatusBadRequest, "invalid", "This event doesn't send reminders, so it doesn't take an email.")
+		return
+	case remindersOff:
+		body.NotifyVia = nil
+	case body.Status == "remind_me":
+		if !validEmail(email) {
+			JSONErrorCode(w, http.StatusBadRequest, "invalid", "That email address doesn't look right.")
+			return
+		}
+		body.NotifyVia = &email
+	default:
+		body.NotifyVia = nil
 	}
 
 	// On an append-only event a name already on the list is kept as it is,

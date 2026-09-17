@@ -13,16 +13,17 @@ import (
 )
 
 type AdminEvent struct {
-	ID         string     `json:"id"`
-	Slug       string     `json:"slug"`
-	Title      string     `json:"title"`
-	Location   string     `json:"location"`
-	EventDate  *time.Time `json:"event_date"`
-	CreatedAt  time.Time  `json:"created_at"`
-	Emoji      string     `json:"emoji"`
-	IsDemo     bool       `json:"is_demo"`
-	AppendOnly bool       `json:"append_only"`
-	Counts     struct {
+	ID           string     `json:"id"`
+	Slug         string     `json:"slug"`
+	Title        string     `json:"title"`
+	Location     string     `json:"location"`
+	EventDate    *time.Time `json:"event_date"`
+	CreatedAt    time.Time  `json:"created_at"`
+	Emoji        string     `json:"emoji"`
+	IsDemo       bool       `json:"is_demo"`
+	AppendOnly   bool       `json:"append_only"`
+	RemindersOff bool       `json:"reminders_off"`
+	Counts       struct {
 		In       int `json:"in"`
 		Out      int `json:"out"`
 		RemindMe int `json:"remind_me"`
@@ -70,7 +71,7 @@ func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.DB.Query(`
 		SELECT e.id, e.slug, e.title, e.location, e.event_date, e.created_at, e.emoji,
-		       e.is_demo, e.append_only,
+		       e.is_demo, e.append_only, e.reminders_off,
 		       COUNT(*) FILTER (WHERE r.status = 'in')        AS count_in,
 		       COUNT(*) FILTER (WHERE r.status = 'out')       AS count_out,
 		       COUNT(*) FILTER (WHERE r.status = 'remind_me') AS count_remind
@@ -90,7 +91,7 @@ func (h *EventHandlers) AdminGetEvents(w http.ResponseWriter, r *http.Request) {
 		var ev AdminEvent
 		if err := rows.Scan(
 			&ev.ID, &ev.Slug, &ev.Title, &ev.Location, &ev.EventDate, &ev.CreatedAt, &ev.Emoji,
-			&ev.IsDemo, &ev.AppendOnly,
+			&ev.IsDemo, &ev.AppendOnly, &ev.RemindersOff,
 			&ev.Counts.In, &ev.Counts.Out, &ev.Counts.RemindMe,
 		); err != nil {
 			JSONError(w, http.StatusInternalServerError, "failed to scan event")
@@ -222,6 +223,135 @@ func (h *EventHandlers) AdminSetAppendOnly(w http.ResponseWriter, r *http.Reques
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]bool{"append_only": body.AppendOnly})
+}
+
+// AdminSetRemindersOff turns an event's reminders off or on. Turning them
+// off also clears any reminder emails already stored for the event, since
+// none will ever be sent.
+func (h *EventHandlers) AdminSetRemindersOff(w http.ResponseWriter, r *http.Request) {
+	if !adminAuth(h.AdminSecret, r) {
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		RemindersOff bool `json:"reminders_off"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	var eventID string
+	err := h.DB.QueryRow(`UPDATE events SET reminders_off = $1 WHERE slug = $2 RETURNING id`,
+		body.RemindersOff, chi.URLParam(r, "slug")).Scan(&eventID)
+	if err == sql.ErrNoRows {
+		JSONError(w, http.StatusNotFound, "event not found")
+		return
+	}
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to update event")
+		return
+	}
+	cleared := 0
+	if body.RemindersOff {
+		result, err := h.DB.Exec(`UPDATE responses SET notify_via = NULL WHERE event_id = $1 AND notify_via IS NOT NULL`, eventID)
+		if err != nil {
+			JSONError(w, http.StatusInternalServerError, "failed to clear reminder emails")
+			return
+		}
+		n, _ := result.RowsAffected()
+		cleared = int(n)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"reminders_off": body.RemindersOff, "emails_cleared": cleared})
+}
+
+const maxBlockedTermLen = 60
+
+// AdminListBlockedTerms returns every blocked term, alphabetically.
+func (h *EventHandlers) AdminListBlockedTerms(w http.ResponseWriter, r *http.Request) {
+	if !adminAuth(h.AdminSecret, r) {
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	rows, err := h.DB.Query(`SELECT term FROM blocked_terms ORDER BY term`)
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to fetch blocked terms")
+		return
+	}
+	defer rows.Close()
+	terms := []string{}
+	for rows.Next() {
+		var t string
+		if err := rows.Scan(&t); err != nil {
+			JSONError(w, http.StatusInternalServerError, "failed to fetch blocked terms")
+			return
+		}
+		terms = append(terms, t)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string][]string{"terms": terms})
+}
+
+// AdminAddBlockedTerm and AdminRemoveBlockedTerm take the term in a JSON
+// body, never the URL, so it doesn't end up in request logs.
+func (h *EventHandlers) AdminAddBlockedTerm(w http.ResponseWriter, r *http.Request) {
+	h.changeBlockedTerm(w, r, `INSERT INTO blocked_terms (term) VALUES ($1) ON CONFLICT (term) DO NOTHING`)
+}
+
+func (h *EventHandlers) AdminRemoveBlockedTerm(w http.ResponseWriter, r *http.Request) {
+	h.changeBlockedTerm(w, r, `DELETE FROM blocked_terms WHERE term = $1`)
+}
+
+func (h *EventHandlers) changeBlockedTerm(w http.ResponseWriter, r *http.Request, query string) {
+	if !adminAuth(h.AdminSecret, r) {
+		JSONError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	var body struct {
+		Term string `json:"term"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		JSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	term := NormalizeTerm(body.Term)
+	if term == "" {
+		JSONError(w, http.StatusBadRequest, "Enter a word or phrase.")
+		return
+	}
+	if len([]rune(term)) > maxBlockedTermLen {
+		JSONError(w, http.StatusBadRequest, "Terms can be up to 60 characters.")
+		return
+	}
+
+	tx, err := h.DB.BeginTx(r.Context(), nil)
+	if err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to update blocked terms")
+		return
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(query, term); err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to update blocked terms")
+		return
+	}
+	// Every machine polls this version and reloads when it changes.
+	if _, err := tx.Exec(`
+		INSERT INTO settings (key, value) VALUES ('blocked_terms_version', $1)
+		ON CONFLICT (key) DO UPDATE SET value = $1
+	`, strconv.FormatInt(time.Now().UnixNano(), 10)); err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to update blocked terms")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		JSONError(w, http.StatusInternalServerError, "failed to update blocked terms")
+		return
+	}
+	if h.Blocklist != nil {
+		if err := h.Blocklist.Refresh(r.Context()); err != nil {
+			log.Printf("blocklist: refresh after change failed: %v", err)
+		}
+	}
+	h.AdminListBlockedTerms(w, r)
 }
 
 func (h *EventHandlers) AdminUpdateSettings(w http.ResponseWriter, r *http.Request) {

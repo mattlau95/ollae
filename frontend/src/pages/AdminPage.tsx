@@ -23,6 +23,7 @@ type AdminEvent = {
   emoji: string
   is_demo: boolean
   append_only: boolean
+  reminders_off: boolean
   counts: { in: number; out: number; remind_me: number }
   responses: AdminResponse[]
 }
@@ -69,6 +70,9 @@ export default function AdminPage() {
   const [rescraping, setRescraping] = useState(false)
   const [rescrapeStatus, setRescrapeStatus] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [blockedTerms, setBlockedTerms] = useState<string[] | null>(null)
+  const [termInput, setTermInput] = useState('')
+  const [termSaving, setTermSaving] = useState(false)
 
   useEffect(() => {
     if (!key) return
@@ -84,6 +88,8 @@ export default function AdminPage() {
         const json: AdminData = await res.json()
         setData(json)
         setRetentionInput(String(json.retention_months))
+        const terms = await api(`/admin/blocked-terms`, { headers: authHeaders(key) })
+        if (terms.ok) setBlockedTerms((await terms.json()).terms)
       })
       .catch(() => setToast('Failed to load data.'))
       .finally(() => setLoading(false))
@@ -110,6 +116,52 @@ export default function AdminPage() {
     if (!window.confirm(`Delete "${title}" and all its responses?`)) return
     await api(`/admin/events/${slug}`, { method: 'DELETE', headers: authHeaders(key!) })
     setData(prev => prev ? { ...prev, events: prev.events.filter(e => e.slug !== slug) } : null)
+  }
+
+  async function toggleRemindersOff(ev: AdminEvent) {
+    const next = !ev.reminders_off
+    const res = await api(`/admin/events/${ev.slug}/reminders-off`, {
+      method: 'PUT',
+      headers: { ...authHeaders(key!), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reminders_off: next }),
+    }).catch(() => null)
+    if (!res?.ok) {
+      setToast('Failed to update reminders.')
+      return
+    }
+    const { emails_cleared } = await res.json()
+    setData(prev => prev ? {
+      ...prev,
+      events: prev.events.map(e => e.slug === ev.slug ? { ...e, reminders_off: next } : e),
+    } : null)
+    if (emails_cleared) setToast(`Reminders off. Cleared ${emails_cleared} stored email${emails_cleared === 1 ? '' : 's'}.`)
+  }
+
+  async function changeBlockedTerm(path: string, term: string) {
+    const res = await api(path, {
+      method: 'POST',
+      headers: { ...authHeaders(key!), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ term }),
+    }).catch(() => null)
+    if (!res?.ok) {
+      const err = await res?.json().catch(() => null)
+      setToast(err?.error ?? 'Failed to update blocked words.')
+      return false
+    }
+    setBlockedTerms((await res.json()).terms)
+    return true
+  }
+
+  async function addBlockedTerm(e: React.FormEvent) {
+    e.preventDefault()
+    if (!termInput.trim()) return
+    setTermSaving(true)
+    if (await changeBlockedTerm('/admin/blocked-terms', termInput)) setTermInput('')
+    setTermSaving(false)
+  }
+
+  async function removeBlockedTerm(term: string) {
+    await changeBlockedTerm('/admin/blocked-terms/remove', term)
   }
 
   async function toggleAppendOnly(ev: AdminEvent) {
@@ -330,6 +382,56 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* Blocked words */}
+      <section aria-labelledby="blocked-heading" className="mb-6 bg-gray-800 rounded-lg px-4 py-3 flex flex-col gap-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="blocked-heading" className="text-sm font-semibold">Blocked words</h2>
+          <span className="text-xs text-gray-400">
+            Rejected in names, titles and locations, as whole words. Empty means nothing is blocked.
+          </span>
+        </div>
+        <form onSubmit={addBlockedTerm} className="flex gap-2 flex-wrap">
+          <label htmlFor="blocked-term" className="sr-only">Word or phrase to block</label>
+          <input
+            id="blocked-term"
+            value={termInput}
+            onChange={e => setTermInput(e.target.value)}
+            maxLength={60}
+            autoComplete="off"
+            placeholder="Word or phrase"
+            className="flex-1 min-w-0 bg-gray-700 text-gray-100 rounded px-2 py-1 text-sm border border-gray-600 focus:outline-none focus:border-gray-400"
+          />
+          <button
+            type="submit"
+            disabled={!termInput.trim() || termSaving}
+            className="text-sm text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50"
+          >
+            {termSaving ? 'Adding…' : 'Add'}
+          </button>
+        </form>
+        {blockedTerms === null ? (
+          <p className="text-xs text-gray-400">Loading…</p>
+        ) : blockedTerms.length === 0 ? (
+          <p className="text-xs text-gray-400">No blocked words.</p>
+        ) : (
+          <ul className="flex flex-wrap gap-2">
+            {blockedTerms.map(term => (
+              <li key={term} className="inline-flex items-center gap-1 bg-gray-700 rounded pl-2 text-sm">
+                {term}
+                <button
+                  onClick={() => removeBlockedTerm(term)}
+                  aria-label={`Unblock ${term}`}
+                  title="Remove"
+                  className="text-gray-400 hover:text-red-400 transition-colors w-7 h-7 inline-flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {/* Events */}
       <div className="flex flex-col gap-2">
         {/* Batch action bar */}
@@ -448,6 +550,15 @@ export default function AdminPage() {
                         className="accent-amber-500 cursor-pointer w-4 h-4"
                       />
                       append-only
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={ev.reminders_off}
+                        onChange={() => toggleRemindersOff(ev)}
+                        className="accent-amber-500 cursor-pointer w-4 h-4"
+                      />
+                      reminders off
                     </label>
                   </div>
                 )}

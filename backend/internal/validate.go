@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/rivo/uniseg"
@@ -27,12 +26,12 @@ func (e validationError) Error() string { return e.msg }
 
 // cleanField trims s and checks its length and the blocklist. label is how
 // the field is named in the message, e.g. "Names".
-func cleanField(s string, max int, label string) (string, error) {
+func cleanField(s string, max int, label string, blocklist *Blocklist) (string, error) {
 	s = strings.TrimSpace(s)
 	if utf8.RuneCountInString(s) > max {
 		return "", validationError{fmt.Sprintf("%s can be up to %d characters.", label, max)}
 	}
-	if isBlocked(s) {
+	if blocklist.Matches(s) {
 		return "", validationError{"Let's keep it friendly. Try different wording."}
 	}
 	return s, nil
@@ -86,38 +85,4 @@ func validClock(s string) bool {
 func validEventDate(s string) bool {
 	_, err := time.Parse("2006-01-02T15:04:05", s)
 	return err == nil
-}
-
-// Blocked words are matched as whole words after normalizing, so "Dickens"
-// and longer words that merely contain one pass. The few in blockedAnywhere are
-// unambiguous enough to catch inside other words too.
-var (
-	blockedWords = []string{
-	}
-	blockedAnywhere = []string{}
-	leet            = strings.NewReplacer("0", "o", "1", "i", "3", "e", "4", "a", "5", "s", "7", "t", "@", "a", "$", "s", "!", "i")
-	blockedSet      = map[string]bool{}
-)
-
-func init() {
-	for _, w := range blockedWords {
-		blockedSet[w] = true
-	}
-}
-
-func isBlocked(s string) bool {
-	norm := leet.Replace(strings.ToLower(s))
-	words := strings.FieldsFunc(norm, func(r rune) bool { return !unicode.IsLetter(r) })
-	for _, w := range words {
-		if blockedSet[w] || blockedSet[strings.TrimSuffix(w, "s")] || blockedSet[strings.TrimSuffix(w, "es")] {
-			return true
-		}
-	}
-	letters := strings.Join(words, "")
-	for _, w := range blockedAnywhere {
-		if strings.Contains(letters, w) {
-			return true
-		}
-	}
-	return false
 }

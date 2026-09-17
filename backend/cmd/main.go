@@ -60,7 +60,10 @@ func main() {
 		AdminSecret:    os.Getenv("ADMIN_SECRET"),
 		FBAppToken:     os.Getenv("FB_APP_TOKEN"),
 		ClaudeDailyCap: claudeCap,
+		Blocklist:      internal.NewBlocklist(db),
 	}
+	// Picks up terms added or removed in /admin on the other machine.
+	h.Blocklist.StartRefresher(15 * time.Second)
 
 	// Best-effort background loops (only fire while the machine is alive).
 	internal.StartReminderLoop(db, resendKey)
@@ -121,6 +124,10 @@ func main() {
 		r.Get("/events", h.AdminGetEvents)
 		r.Patch("/events/{slug}", h.AdminUpdateEvent)
 		r.Put("/events/{slug}/append-only", h.AdminSetAppendOnly)
+		r.Put("/events/{slug}/reminders-off", h.AdminSetRemindersOff)
+		r.Get("/blocked-terms", h.AdminListBlockedTerms)
+		r.Post("/blocked-terms", h.AdminAddBlockedTerm)
+		r.Post("/blocked-terms/remove", h.AdminRemoveBlockedTerm)
 		r.Delete("/events/{slug}", h.AdminDeleteEvent)
 		r.Post("/events/{slug}/rescrape", h.RescrapeEvent)
 		r.Delete("/responses/{id}", h.AdminDeleteResponse)

@@ -13,7 +13,9 @@ CREATE TABLE IF NOT EXISTS events (
   -- Created from the portfolio embed; deleted 3 days after creation.
   is_demo     BOOLEAN NOT NULL DEFAULT false,
   -- A name already on the list can't be resubmitted to change its answer.
-  append_only BOOLEAN NOT NULL DEFAULT false
+  append_only BOOLEAN NOT NULL DEFAULT false,
+  -- "Remind me" is recorded but no email is taken or sent.
+  reminders_off BOOLEAN NOT NULL DEFAULT false
 );
 
 CREATE TABLE IF NOT EXISTS responses (
@@ -35,6 +37,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS responses_event_id_name_idx
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
+);
+
+-- Words and phrases visitors can't use, managed in /admin. Never seeded
+-- from a file, so the terms stay out of the repo. Changing it bumps
+-- settings.blocked_terms_version, which every machine polls.
+CREATE TABLE IF NOT EXISTS blocked_terms (
+  term       TEXT PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Claude API calls per UTC day, checked against CLAUDE_DAILY_CAP.

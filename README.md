@@ -85,7 +85,7 @@ Browser → ollae.app (Vercel) → ollae-backend.fly.dev (Fly.io) → Postgres (
 - `GET   /cron/remind`         — send due reminder emails (token-protected)
 - `/admin/*`                   — dashboard endpoints, bearer-token auth
 
-Writes are rate-limited per client (keyed on `Fly-Client-IP`), and Claude calls are capped per day in Postgres (`CLAUDE_DAILY_CAP`, default 300).
+Writes are rate-limited per client (keyed on `Fly-Client-IP`), and Claude calls are capped per day in Postgres (`CLAUDE_DAILY_CAP`, default 300). Words that names, titles and locations can't contain are managed in `/admin` and stored only in the database, never in this repo.
 
 **Portfolio embeds.** Two screens can be framed by the portfolio case study, with `?embed=1`: the guestbook event (`/events/wssrfd7v?_src=app&embed=1`) and `/create?embed=1`. Only those two, and only by the portfolio's origins, via CSP `frame-ancestors` in `vercel.json` and `internal/framing.go`; everything else sends `frame-ancestors 'none'`. In embed mode the page reports its height to the parent with `postMessage`, links leave in a new tab, and events created from the frame are demos, deleted after 3 days. See `frontend/src/embed.ts` for the message protocol.
 

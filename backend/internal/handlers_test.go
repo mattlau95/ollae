@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -19,6 +20,7 @@ func testServer(t *testing.T, h *EventHandlers) *httptest.Server {
 	r.Use(NoFraming)
 	r.Post("/events", h.CreateEvent)
 	r.Get("/events/{slug}", h.GetEvent)
+	r.Patch("/events/{slug}", h.UpdateEvent)
 	r.Post("/events/{slug}/rsvp", h.SubmitRSVP)
 	r.Delete("/events/{slug}/responses/{id}", h.DeleteResponse)
 	r.Get("/og-preview/{slug}", h.OGPreview)
@@ -98,7 +100,7 @@ func TestRSVPAppendOnly(t *testing.T) {
 
 func TestRSVPValidation(t *testing.T) {
 	db := testDB(t)
-	srv := testServer(t, &EventHandlers{DB: db})
+	srv := testServer(t, &EventHandlers{DB: db, Blocklist: staticBlocklist("blockedword")})
 	insertEvent(t, db, "party", time.Now().Add(24*time.Hour))
 	insertEvent(t, db, "demo", time.Now().Add(24*time.Hour))
 	db.Exec(`UPDATE events SET is_demo = true WHERE slug = 'demo'`)
@@ -144,13 +146,13 @@ func TestRSVPValidation(t *testing.T) {
 
 func TestCreateEventValidationAndDemo(t *testing.T) {
 	db := testDB(t)
-	srv := testServer(t, &EventHandlers{DB: db})
+	srv := testServer(t, &EventHandlers{DB: db, Blocklist: staticBlocklist("blockedword")})
 
 	for body, want := range map[string]string{
 		`{"title":"  "}`: "Give your event a name.",
 		`{"title":"` + strings.Repeat("x", 81) + `"}`:                     "Event names can be up to 80 characters.",
 		`{"title":"Party","location":"` + strings.Repeat("x", 121) + `"}`: "Locations can be up to 120 characters.",
-		`{"title":"Party","location":"Blockedword bar"}`:                         "Let's keep it friendly. Try different wording.",
+		`{"title":"Party","location":"Blockedword bar"}`:                  "Let's keep it friendly. Try different wording.",
 		`{"title":"Party","event_date":"tomorrow"}`:                       "That date or time doesn't look right.",
 	} {
 		code, b := do(t, "POST", srv.URL+"/events", body)
@@ -273,5 +275,71 @@ func TestClaudeDailyCap(t *testing.T) {
 	db.Exec(`UPDATE claude_usage SET day = day - 1`)
 	if err := takeClaudeCall(ctx, db, 3); err != nil {
 		t.Errorf("first call of a new day: %v", err)
+	}
+}
+
+func TestRemindersOff(t *testing.T) {
+	db := testDB(t)
+	h := &EventHandlers{DB: db, AdminSecret: "secret"}
+	srv := testServer(t, h)
+	guestbookID := insertEvent(t, db, "guestbook", time.Now().Add(24*time.Hour))
+	insertEvent(t, db, "normal", time.Now().Add(24*time.Hour))
+
+	// An email stored before reminders were turned off.
+	insertRemindMe(t, db, guestbookID, "early")
+
+	r := httptest.NewRequest("PUT", "/admin/events/guestbook/reminders-off", strings.NewReader(`{"reminders_off":true}`))
+	r.Header.Set("Authorization", "Bearer secret")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("slug", "guestbook")
+	r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+	h.AdminSetRemindersOff(w, r)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"emails_cleared":1`) {
+		t.Fatalf("turn reminders off: %d %s", w.Code, w.Body.String())
+	}
+
+	// Remind me is still an answer, without an email.
+	if code, b := do(t, "POST", srv.URL+"/events/guestbook/rsvp", `{"name":"Unsure","status":"remind_me"}`); code != 200 {
+		t.Fatalf("remind_me without an email: %d %s", code, b)
+	}
+	// Any email is rejected, whatever the answer.
+	for _, body := range []string{
+		`{"name":"Sam","status":"remind_me","notify_via":"sam@example.com"}`,
+		`{"name":"Sam","status":"in","notify_via":"sam@example.com"}`,
+	} {
+		code, b := do(t, "POST", srv.URL+"/events/guestbook/rsvp", body)
+		if code != http.StatusBadRequest || !strings.Contains(decodeError(t, b).Error, "doesn't send reminders") {
+			t.Errorf("%s: %d %s, want 400", body, code, b)
+		}
+	}
+
+	var stored int
+	db.QueryRow(`SELECT count(*) FROM responses WHERE event_id = $1 AND notify_via IS NOT NULL`, guestbookID).Scan(&stored)
+	if stored != 0 {
+		t.Errorf("%d emails stored on a reminders-off event", stored)
+	}
+	var status string
+	db.QueryRow(`SELECT status FROM responses WHERE name = 'Unsure'`).Scan(&status)
+	if status != "remind_me" {
+		t.Errorf("status = %q, want remind_me", status)
+	}
+
+	// Other events still need an email for Remind me.
+	if code, _ := do(t, "POST", srv.URL+"/events/normal/rsvp", `{"name":"Unsure","status":"remind_me"}`); code != http.StatusBadRequest {
+		t.Errorf("normal event remind_me without email: %d, want 400", code)
+	}
+
+	// The public event says reminders are off; the reminder job skips it even
+	// if an email somehow got stored.
+	_, body := do(t, "GET", srv.URL+"/events/guestbook", "")
+	if !strings.Contains(string(body), `"reminders_off":true`) || strings.Contains(string(body), "notify_via") {
+		t.Errorf("public event JSON: %s", body)
+	}
+	db.Exec(`UPDATE responses SET notify_via = 'sneaky@example.com' WHERE name = 'Unsure'`)
+	sent := fakeResend(t, http.StatusOK)
+	SendReminders(db, "test-key")
+	if got := sent(); len(got) != 0 {
+		t.Errorf("reminder job emailed %v on a reminders-off event", got)
 	}
 }

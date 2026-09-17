@@ -6,41 +6,19 @@ import (
 )
 
 func TestCleanField(t *testing.T) {
-	got, err := cleanField("  Alex K.  ", maxNameLen, "Names")
+	got, err := cleanField("  Alex K.  ", maxNameLen, "Names", nil)
 	if err != nil || got != "Alex K." {
 		t.Errorf("cleanField trims: got %q, %v", got, err)
 	}
-	if _, err := cleanField(strings.Repeat("é", maxNameLen), maxNameLen, "Names"); err != nil {
+	if _, err := cleanField(strings.Repeat("é", maxNameLen), maxNameLen, "Names", nil); err != nil {
 		t.Errorf("exactly %d characters (multi-byte) should pass: %v", maxNameLen, err)
 	}
-	_, err = cleanField(strings.Repeat("a", maxNameLen+1), maxNameLen, "Names")
+	_, err = cleanField(strings.Repeat("a", maxNameLen+1), maxNameLen, "Names", nil)
 	if err == nil || err.Error() != "Names can be up to 40 characters." {
 		t.Errorf("too long: got %v", err)
 	}
-	if _, err := cleanField("big blockedword energy", maxTitleLen, "Titles"); err == nil {
+	if _, err := cleanField("big bl0ckedword energy", maxTitleLen, "Titles", staticBlocklist("blockedword")); err == nil {
 		t.Error("blocked word should be rejected")
-	}
-}
-
-func TestIsBlocked(t *testing.T) {
-	blocked := []string{
-		"blockedword", "BLOCKEDWORD", "b.l.o.c.k.e.d.w.o.r.d this", "bl0ckedw0rd", "Bl0ckedword",
-		"blockedwords", "xxblockedwordxx", "$illyterm",
-	}
-	allowed := []string{
-		"Blockedwordsmith Street", "Harbor Park", "Riverside United", "Matt",
-		"Orchard Street", "Book Club", "Weekly practice", "Board game night",
-		"Alexander Library", "Class of 2026", "Spring social", "Oak Trail",
-	}
-	for _, s := range blocked {
-		if !isBlocked(s) {
-			t.Errorf("isBlocked(%q) = false, want true", s)
-		}
-	}
-	for _, s := range allowed {
-		if isBlocked(s) {
-			t.Errorf("isBlocked(%q) = true, want false", s)
-		}
 	}
 }
 

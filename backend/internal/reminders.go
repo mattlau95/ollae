@@ -102,6 +102,7 @@ const dueReminders = `
 	  AND r.reminded_at IS NULL
 	  AND r.notify_via IS NOT NULL
 	  AND e.event_date IS NOT NULL
+	  AND NOT e.reminders_off
 	  AND e.event_date BETWEEN now() + interval '23 hours' AND now() + interval '25 hours'
 `
 

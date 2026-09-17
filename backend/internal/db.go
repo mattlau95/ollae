@@ -31,6 +31,16 @@ func RunMigrations(db *sql.DB) {
 
 		ALTER TABLE events ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false;
 		ALTER TABLE events ADD COLUMN IF NOT EXISTS append_only BOOLEAN NOT NULL DEFAULT false;
+		ALTER TABLE events ADD COLUMN IF NOT EXISTS reminders_off BOOLEAN NOT NULL DEFAULT false;
+
+		-- Blocked words and phrases, managed in /admin. Deliberately not
+		-- seeded from any file: the terms stay out of this public repo.
+		CREATE TABLE IF NOT EXISTS blocked_terms (
+			term       TEXT PRIMARY KEY,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		);
+		INSERT INTO settings (key, value) VALUES ('blocked_terms_version', '0')
+		ON CONFLICT (key) DO NOTHING;
 
 		CREATE TABLE IF NOT EXISTS claude_usage (
 			day   DATE PRIMARY KEY,

@@ -24,6 +24,7 @@ type Event = {
   emoji?: string
   is_demo?: boolean
   append_only?: boolean
+  reminders_off?: boolean
 }
 
 type RSVPStatus = 'in' | 'out' | 'remind_me' | null
@@ -188,7 +189,7 @@ export default function RSVPPage() {
           name: name.trim(),
           status,
           guests,
-          ...(status === 'remind_me' && notifyVia.trim() ? { notify_via: notifyVia.trim() } : {}),
+          ...(status === 'remind_me' && !event?.reminders_off && notifyVia.trim() ? { notify_via: notifyVia.trim() } : {}),
         }),
       })
       if (!res.ok) {
@@ -254,13 +255,13 @@ export default function RSVPPage() {
     </div>
   )
 
-  if (submitted) return <SuccessScreen frameRef={frameRef} name={name} status={status!} guests={guests} eventEmoji={event?.emoji || '🎉'} appendOnly={!!event?.append_only} onBack={() => setSubmitted(false)} />
+  if (submitted) return <SuccessScreen frameRef={frameRef} name={name} status={status!} guests={guests} eventEmoji={event?.emoji || '🎉'} appendOnly={!!event?.append_only} remindersOff={!!event?.reminders_off} onBack={() => setSubmitted(false)} />
 
   const attendingCount = responses.filter(r => r.status === 'in').reduce((sum, r) => sum + 1 + (r.guests || 0), 0)
   const sorted = [...responses].reverse()
   const visible = showAll ? sorted : sorted.slice(0, 8)
   const canSubmit = !!(name.trim() && status && (status !== 'remind_me' || notifyVia.trim()))
-  const canRemindMe = !!notifyVia.trim()
+  const canRemindMe = !!event?.reminders_off || !!notifyVia.trim()
 
   return (
     <div ref={frameRef} className={`${isEmbed ? '' : 'min-h-screen'} bg-bg-base flex flex-col items-center px-4 py-6`}>
@@ -548,17 +549,25 @@ export default function RSVPPage() {
             </div>
             {status === 'remind_me' && (
               <div className="flex flex-col gap-3">
-                <label htmlFor="remind-email" className="sr-only">Email address for the reminder</label>
-                <input
-                  id="remind-email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="Your email address"
-                  value={notifyVia}
-                  onChange={e => setNotifyVia(e.target.value)}
-                  autoFocus
-                  className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary placeholder-text-muted border border-status-remind/50 focus:outline-none focus:border-status-remind transition-colors"
-                />
+                {event!.reminders_off ? (
+                  <p className="text-base text-text-muted text-center">
+                    This one's pretend, so no email goes out.
+                  </p>
+                ) : (
+                  <>
+                    <label htmlFor="remind-email" className="sr-only">Email address for the reminder</label>
+                    <input
+                      id="remind-email"
+                      type="email"
+                      autoComplete="email"
+                      placeholder="Your email address"
+                      value={notifyVia}
+                      onChange={e => setNotifyVia(e.target.value)}
+                      autoFocus
+                      className="w-full bg-bg-surface rounded-xl p-4 text-base text-text-primary placeholder-text-muted border border-status-remind/50 focus:outline-none focus:border-status-remind transition-colors"
+                    />
+                  </>
+                )}
                 <button
                   onClick={handleSubmit}
                   disabled={!canRemindMe || submitting}
@@ -570,9 +579,11 @@ export default function RSVPPage() {
                 >
                   {submitting ? 'Submitting...' : 'Remind me →'}
                 </button>
-                <p className="text-sm text-text-muted text-center">
-                  We'll only use your email for this one reminder, then delete it.
-                </p>
+                {!event!.reminders_off && (
+                  <p className="text-sm text-text-muted text-center">
+                    We'll only use your email for this one reminder, then delete it.
+                  </p>
+                )}
               </div>
             )}
           </div>}
@@ -606,13 +617,14 @@ export default function RSVPPage() {
   )
 }
 
-function SuccessScreen({ frameRef, name, status, guests, eventEmoji, appendOnly, onBack }: {
+function SuccessScreen({ frameRef, name, status, guests, eventEmoji, appendOnly, remindersOff, onBack }: {
   frameRef: Ref<HTMLDivElement>
   name: string
   status: RSVPStatus
   guests: number
   eventEmoji: string
   appendOnly: boolean
+  remindersOff: boolean
   onBack: () => void
 }) {
   useEffect(() => {
@@ -621,7 +633,8 @@ function SuccessScreen({ frameRef, name, status, guests, eventEmoji, appendOnly,
   }, [status])
 
   const emoji = status === 'in' ? '🙌' : status === 'out' ? '😢' : '🔔'
-  const message = status === 'in' ? "You're on the list!" : status === 'out' ? "Got it, you're out." : "We'll remind you!"
+  const message = status === 'in' ? "You're on the list!" : status === 'out' ? "Got it, you're out."
+    : remindersOff ? "Noted, you're not sure yet." : "We'll remind you!"
   const guestSuffix = status === 'in' && guests > 0 ? ` (+${guests})` : ''
   const statusLine = status === 'in' ? `${name}${guestSuffix} · I'm in ${eventEmoji}` : status === 'out' ? `${name} · Can't make it 😔` : `${name} · Remind me 🔔`
   const statusColor = status === 'in' ? 'text-[#22C55E]' : status === 'out' ? 'text-[#EF4444]' : 'text-status-remind'
