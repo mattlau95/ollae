@@ -1976,7 +1976,7 @@ A `\.` in `notepad backend\.env` became `backend.env` in the repo root, briefly 
 ### Still Open
 
 - iPhone Safari check of both embeds once the portfolio page is live
-- GitHub still serves the old pre-rewrite commit by exact hash; a Support request to remove it is drafted, ready to send
+- GitHub still serves the old pre-rewrite commit by exact hash; a Support request to remove it was submitted Sep 17
 - Resend's Free plan caps reminders at 100 emails a day
 
 ---
