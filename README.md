@@ -4,13 +4,13 @@
 
 A frictionless group RSVP tool. Drop a link in the group chat, see who's in. No accounts, no apps, no friction.
 
-**Live:** [ollae.app](https://ollae.app)
+**Live:** [ollae.app](https://ollae.app) · **Case study:** [matthewclau.com](https://matthewclau.com/projects/ollae.html)
 
 ---
 
 ## The Problem
 
-Every group activity starts the same way — a message in the chat, a flood of replies, and no clear picture of who's actually coming. Existing tools either require everyone to sign up, feel corporate, or are buried inside another app.
+Every Thursday from May to August, I run a pickup volleyball game at my church. Anywhere from 12 to 30-plus people come, and they don't all live in the same chat — there's a Facebook Messenger group, a WeChat group for our Mandarin-speaking members, and a handful of people I invite one by one. Every week I posted the same invite in all of those places, then tallied the replies by hand. Existing tools all wanted everyone to sign up, or buried the event inside another app.
 
 Ollae is just a link. The organizer creates an event and shares the URL. Participants tap it, RSVP, and the list updates in real time.
 
